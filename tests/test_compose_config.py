@@ -37,6 +37,8 @@ def test_docling_serve_yaml_points_to_gateway():
     ocr_auto = data["custom_ocr_presets"]["auto"]
     assert ocr_auto["kind"] == "kserve_v2_ocr"
     assert ocr_auto["model_name"] == "ocr"
+    assert ocr_auto["timeout"] == 300.0
+    assert layout_default["engine_options"]["timeout"] == 180.0
     assert data["default_table_structure_preset"] == "tableformer_v1_accurate"
     assert "custom_table_structure_presets" not in data
     pic_default = data["custom_picture_classification_presets"]["default"]

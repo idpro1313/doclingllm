@@ -14,17 +14,20 @@ log_format: json
 # OCR → UI/API шлют ocr_preset=auto; перезаписываем registry["auto"]
 default_ocr_kind: kserve_v2_ocr
 default_ocr_preset: remote_ocr
+# timeout: docling KServe default is 60s; remote VLM OCR often needs 2–5 min per page.
 custom_ocr_presets:
   auto:
     kind: kserve_v2_ocr
     url: "http://model-gateway:8080"
     transport: http
     model_name: ocr
+    timeout: 300.0
   remote_ocr:
     kind: kserve_v2_ocr
     url: "http://model-gateway:8080"
     transport: http
     model_name: ocr
+    timeout: 300.0
 
 # Layout → _parse_layout_options("default"); перезаписываем registry["default"]
 default_layout_kind: layout_object_detection
@@ -37,6 +40,7 @@ custom_layout_presets:
       url: "http://model-gateway:8080"
       transport: http
       model_name: layout
+      timeout: 180.0
   remote_layout:
     kind: layout_object_detection
     engine_options:
@@ -44,6 +48,7 @@ custom_layout_presets:
       url: "http://model-gateway:8080"
       transport: http
       model_name: layout
+      timeout: 180.0
 
 # Table: remote KServe kind в docling WIP → bundled TableFormer в образе
 default_table_structure_preset: tableformer_v1_accurate
@@ -57,6 +62,7 @@ custom_picture_classification_presets:
       url: "http://model-gateway:8080"
       transport: http
       model_name: picture_classifier
+      timeout: 180.0
     model_spec:
       name: document_figure_classifier_v2_5
       repo_id: docling-project/DocumentFigureClassifier-v2.5
@@ -66,6 +72,7 @@ custom_picture_classification_presets:
       url: "http://model-gateway:8080"
       transport: http
       model_name: picture_classifier
+      timeout: 180.0
     model_spec:
       name: document_figure_classifier_v2_5
       repo_id: docling-project/DocumentFigureClassifier-v2.5
@@ -84,7 +91,7 @@ custom_vlm_presets:
       params:
         # Gateway rewrites to VISION_MODEL from env; value here is a placeholder for docling.
         model: remote-vision
-      timeout: 120.0
+      timeout: 300.0
       concurrency: 1
     model_spec:
       name: Remote-Vision-VLM
@@ -103,7 +110,7 @@ custom_picture_description_presets:
       url: "http://model-gateway:8080/v1/chat/completions"
       params:
         model: remote-vision
-      timeout: 120.0
+      timeout: 300.0
       concurrency: 1
     model_spec:
       name: Remote-Vision-PictureDesc
