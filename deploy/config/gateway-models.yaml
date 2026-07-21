@@ -1,0 +1,63 @@
+# Маршрутизация стадий docling → внешние OpenAI-compatible API
+# Секреты (VISION_API_KEY) — только из env, подставляются gateway при старте.
+
+endpoints:
+  vision:
+    base_url: "${VISION_API_BASE_URL}"
+    api_key_env: VISION_API_KEY
+    default_model: "${VISION_MODEL}"
+  text:
+    base_url: "${TEXT_API_BASE_URL}"
+    api_key_env: TEXT_API_KEY
+    default_model: "${TEXT_MODEL}"
+
+stages:
+  # KServe-адаптер: image → chat/completions → parse → KServe tensors
+  ocr:
+    endpoint: vision
+    mode: openai_vision
+    model: deepseek-ai/DeepSeek-OCR-2
+    path: /chat/completions
+    response_parser: deepseek_ocr_json
+
+  layout:
+    endpoint: vision
+    mode: openai_vision
+    model: deepseek-ai/DeepSeek-OCR-2
+    path: /chat/completions
+    response_parser: layout_boxes_json
+    system_prompt: "Detect document layout regions. Return JSON array of {label, bbox:[x1,y1,x2,y2]}."
+
+  table:
+    endpoint: vision
+    mode: openai_vision
+    model: deepseek-ai/DeepSeek-OCR-2
+    path: /chat/completions
+    response_parser: table_structure_json
+    system_prompt: "Extract table cell grid from image. Return JSON with rows/cols/cells."
+
+  picture_classification:
+    endpoint: vision
+    mode: openai_vision
+    model: deepseek-ai/DeepSeek-OCR-2
+    path: /chat/completions
+    response_parser: classification_json
+
+  picture_description:
+    endpoint: vision
+    mode: openai_vision
+    model: deepseek-ai/DeepSeek-OCR-2
+    path: /chat/completions
+
+  vlm:
+    endpoint: vision
+    mode: openai_proxy
+    model: deepseek-ai/DeepSeek-OCR-2
+    path: /chat/completions
+
+  code_formula:
+    endpoint: text
+    mode: openai_text
+    model: minimax-m2.7
+    path: /chat/completions
+    system_prompt: "Transcribe code or formula from the provided context."

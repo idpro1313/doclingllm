@@ -1,0 +1,91 @@
+# docling-serve admin configuration — remote inference via model-gateway
+# Mount path in container: /config/docling-serve.yaml
+
+enable_remote_services: true
+load_models_at_boot: false
+log_format: json
+
+# OCR → KServe v2 HTTP on gateway
+default_ocr_kind: kserve_v2_ocr
+default_ocr_preset: remote_ocr
+custom_ocr_presets:
+  remote_ocr:
+    kind: kserve_v2_ocr
+    url: "http://model-gateway:8080"
+    transport: http
+    model_name: ocr
+
+# Layout → KServe v2 on gateway (object detection)
+default_layout_preset: remote_layout
+custom_layout_presets:
+  remote_layout:
+    kind: kserve_v2_ocr
+    url: "http://model-gateway:8080"
+    transport: http
+    model_name: layout
+
+# Table structure → KServe v2 on gateway
+default_table_structure_preset: remote_table
+custom_table_structure_presets:
+  remote_table:
+    kind: kserve_v2_ocr
+    url: "http://model-gateway:8080"
+    transport: http
+    model_name: table
+
+# Picture classification
+default_picture_classification_preset: remote_pic_class
+custom_picture_classification_presets:
+  remote_pic_class:
+    kind: kserve_v2_ocr
+    url: "http://model-gateway:8080"
+    transport: http
+    model_name: picture_classifier
+
+# VLM pipeline → OpenAI-compatible proxy on gateway
+default_vlm_preset: remote_vlm
+custom_vlm_presets:
+  remote_vlm:
+    engine_options:
+      engine_type: api
+    model_spec:
+      api_overrides:
+        api:
+          url: "http://model-gateway:8080/v1/chat/completions"
+          params:
+            model: deepseek-ai/DeepSeek-OCR-2
+
+# Picture description
+default_picture_description_preset: remote_pic_desc
+custom_picture_description_presets:
+  remote_pic_desc:
+    engine_options:
+      engine_type: api
+    model_spec:
+      api_overrides:
+        api:
+          url: "http://model-gateway:8080/v1/chat/completions"
+          params:
+            model: deepseek-ai/DeepSeek-OCR-2
+
+# Code/formula → text backend via gateway OpenAI proxy
+default_code_formula_preset: remote_code_formula
+custom_code_formula_presets:
+  remote_code_formula:
+    engine_options:
+      engine_type: api
+    model_spec:
+      api_overrides:
+        api:
+          url: "http://model-gateway:8080/v1/chat/completions"
+          params:
+            model: minimax-m2.7
+
+allowed_vlm_presets:
+  - remote_vlm
+allowed_picture_description_presets:
+  - remote_pic_desc
+allowed_code_formula_presets:
+  - remote_code_formula
+allowed_ocr_presets:
+  - remote_ocr

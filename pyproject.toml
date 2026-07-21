@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "doclingllm"
+version = "0.2.0"
+description = "Model Gateway wrapper for docling-serve remote API inference"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",       # ASGI gateway routes (Slices S4-S5)
+    "uvicorn>=0.32.0",        # Production server in gateway container
+    "httpx>=0.28.0",          # Async outbound HTTP to Cloud.ru and LAN (Slice S2)
+    "pydantic-settings>=2.0", # Typed env config loading
+    "numpy>=2.0.0",           # KServe tensor encode/decode (Slice S4)
+    "pyyaml>=6.0",            # gateway-models.yaml declarative routing
+    "pillow>=10.0",           # KServe UINT8 tensor to PNG conversion
+]
+
+[project.scripts]
+doclingllm-gateway = "doclingllm.gateway.app:run_gateway"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

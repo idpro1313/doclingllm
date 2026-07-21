@@ -1,6 +1,7 @@
 # Python
 __pycache__/
 *.py[cod]
+*.egg-info/
 .pytest_cache/
 .venv/
 venv/
@@ -36,3 +37,6 @@ docs/HISTORY.md
 # Вспомогательные артефакты агента (отчёты, черновики) — см. agent-rules.mdc §7
 work/*
 !work/README.md
+
+# Секреты деплоя (токены API — только локально)
+deploy/.env

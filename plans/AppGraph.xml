@@ -1,0 +1,88 @@
+<KnowledgeGraph>
+  <doclingllm_0_2_0_Info TYPE="PROJECT_INFO">
+    <keywords>docling-serve, Model Gateway, KServe v2, Cloud.ru, DeepSeek-OCR-2, minimax, Docker, layered architecture</keywords>
+    <terms>L1 Transport, L2 Protocol, L3 Adaptation, L4 Integration, feature slice</terms>
+    <annotation>Обёртка docling-serve: Model Gateway (4 слоя) маршрутизирует vision→Cloud.ru и text→LAN minimax. Vendor read-only.</annotation>
+    <BusinessScenarios>
+      <Scenario NAME="DeployOnUbuntu">Operator → scripts/start.sh → Docker stack healthy</Scenario>
+      <Scenario NAME="ConvertDocument">Client → docling-serve:5001 → gateway:8080 → external APIs</Scenario>
+      <Scenario NAME="KServeOCR">docling OCR stage → gateway /v2/models/ocr/infer → DeepSeek-OCR-2</Scenario>
+      <Scenario NAME="TextEnrichment">docling code_formula → gateway → minimax-m2.7 LAN</Scenario>
+    </BusinessScenarios>
+  </doclingllm_0_2_0_Info>
+
+  <plans_Architecture_md FILE="plans/Architecture.md" TYPE="ARCHITECTURE_DOCUMENT">
+    <keywords>C4, layers, sequence, deployment, slices S1-S8</keywords>
+    <annotation>Canonical architecture: context diagram, L1-L4 modules, API contracts, mode-code delegation.</annotation>
+  </plans_Architecture_md>
+
+  <docling_serve_vendor TYPE="VENDOR_MODULE">
+    <keywords>upstream, read-only, docling-serve-cpu</keywords>
+    <annotation>Official image quay.io/docling-project/docling-serve-cpu pinned tag.</annotation>
+    <docling_serve_settings_py FILE="docling-serve/docling_serve/settings.py" TYPE="CONFIG_MODULE">
+      <annotation>enable_remote_services, custom presets, load_models_at_boot.</annotation>
+    </docling_serve_settings_py>
+  </docling_serve_vendor>
+
+  <deploy_docker_compose_yml FILE="deploy/docker-compose.yml" TYPE="DEPLOYMENT_MANIFEST">
+    <annotation>model-gateway + docling-serve-cpu, doclingllm-net bridge.</annotation>
+    <CrossLinks>
+      <Link TARGET="scripts_start_sh" TYPE="DEPLOYED_BY" />
+      <Link TARGET="deploy_config_docling_serve_yaml" TYPE="MOUNTS" />
+      <Link TARGET="deploy_config_gateway_models_yaml" TYPE="MOUNTS" />
+    </CrossLinks>
+  </deploy_docker_compose_yml>
+
+  <deploy_config_docling_serve_yaml FILE="deploy/config/docling-serve.yaml" TYPE="CONFIG_FILE">
+    <annotation>Admin presets remote_ocr layout table vlm pointing to model-gateway.</annotation>
+  </deploy_config_docling_serve_yaml>
+
+  <deploy_config_gateway_models_yaml FILE="deploy/config/gateway-models.yaml" TYPE="CONFIG_FILE">
+    <annotation>Stage routing vision text endpoints and parser names.</annotation>
+    <CrossLinks>
+      <Link TARGET="src_doclingllm_gateway_routing_py" TYPE="LOADED_BY" />
+    </CrossLinks>
+  </deploy_config_gateway_models_yaml>
+
+  <src_doclingllm_gateway_app_py FILE="src/doclingllm/gateway/app.py" TYPE="L1_TRANSPORT">
+    <annotation>FastAPI create_app health KServe and OpenAI routes.</annotation>
+  </src_doclingllm_gateway_app_py>
+
+  <src_doclingllm_gateway_kserve_py FILE="src/doclingllm/gateway/kserve.py" TYPE="L2_PROTOCOL">
+    <annotation>KServe v2 infer decode encode per stage.</annotation>
+    <CrossLinks>
+      <Link TARGET="src_doclingllm_gateway_parsers" TYPE="USES_API" />
+      <Link TARGET="src_doclingllm_gateway_client_py" TYPE="CALLS_MODULE" />
+    </CrossLinks>
+  </src_doclingllm_gateway_kserve_py>
+
+  <src_doclingllm_gateway_openai_proxy_py FILE="src/doclingllm/gateway/openai_proxy.py" TYPE="L2_PROTOCOL">
+    <annotation>OpenAI chat completions pass-through and text routing.</annotation>
+  </src_doclingllm_gateway_openai_proxy_py>
+
+  <src_doclingllm_gateway_routing_py FILE="src/doclingllm/gateway/routing.py" TYPE="L3_ADAPTATION">
+    <annotation>Load gateway-models.yaml resolve stage to endpoint mode parser.</annotation>
+  </src_doclingllm_gateway_routing_py>
+
+  <src_doclingllm_gateway_parsers TYPE="L3_ADAPTATION_PACKAGE">
+    <annotation>Parser registry deepseek_ocr_json layout_boxes_json table_structure_json.</annotation>
+  </src_doclingllm_gateway_parsers>
+
+  <src_doclingllm_gateway_client_py FILE="src/doclingllm/gateway/client.py" TYPE="L4_INTEGRATION">
+    <annotation>httpx ExternalApiClient Cloud.ru Bearer and LAN minimax.</annotation>
+  </src_doclingllm_gateway_client_py>
+
+  <src_doclingllm_gateway_config_py FILE="src/doclingllm/gateway/config.py" TYPE="L4_INTEGRATION">
+    <annotation>Pydantic settings VISION_API TEXT_API gateway bind.</annotation>
+  </src_doclingllm_gateway_config_py>
+
+  <scripts_start_sh FILE="scripts/start.sh" TYPE="DEPLOY_SCRIPT">
+    <annotation>Ubuntu docker compose up healthcheck.</annotation>
+  </scripts_start_sh>
+
+  <ProjectCrossLinks TYPE="MODULE_INTERACTIONS_OVERVIEW">
+    <Link TARGET="plans_Architecture_md" TYPE="DEFINES_ARCHITECTURE" />
+    <Link TARGET="docling_serve_vendor" TYPE="INTEGRATES_WITH" />
+    <Link TARGET="src_doclingllm_gateway_app_py" TYPE="ORCHESTRATES_FLOW" />
+  </ProjectCrossLinks>
+</KnowledgeGraph>
