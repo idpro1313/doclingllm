@@ -3,9 +3,6 @@ def _module_contract():
     pass
 # endregion MODULE_CONTRACT
 
-import base64
-import json
-
 import httpx
 from fastapi.testclient import TestClient
 
@@ -47,7 +44,9 @@ def test_kserve_model_metadata_endpoint(gateway_settings, full_routing_yaml):
         assert response.status_code == 200
         body = response.json()
         assert body["name"] == "layout"
-        assert body["inputs"][0]["datatype"] == "BYTES"
+        assert body["inputs"][0]["name"] == "images"
+        assert body["inputs"][0]["datatype"] == "FP32"
+        assert body["outputs"][0]["name"] == "labels"
 
         ready = test_client.get("/v2/models/layout/ready")
         assert ready.status_code == 200
@@ -59,7 +58,7 @@ def test_kserve_model_metadata_endpoint(gateway_settings, full_routing_yaml):
     client.close()
 
 
-def test_kserve_infer_endpoint(gateway_settings, full_routing_yaml, kserve_image_request):
+def test_kserve_infer_endpoint(gateway_settings, full_routing_yaml, kserve_ocr_request):
     table = load_routing_table(full_routing_yaml, gateway_settings)
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -77,10 +76,11 @@ def test_kserve_infer_endpoint(gateway_settings, full_routing_yaml, kserve_image
     app = create_app(settings=gateway_settings, routing_table=table, client=client)
 
     with TestClient(app) as test_client:
-        response = test_client.post("/v2/models/ocr/infer", json=kserve_image_request)
+        response = test_client.post("/v2/models/ocr/infer", json=kserve_ocr_request)
         assert response.status_code == 200
         body = response.json()
-        decoded = json.loads(base64.b64decode(body["outputs"][0]["data"][0]))
-        assert decoded["text_regions"][0]["text"] == "API"
+        boxes_output = next(item for item in body["outputs"] if item["name"] == "boxes")
+        assert boxes_output["datatype"] == "FP32"
+        assert len(boxes_output["data"]) > 0
 
     client.close()

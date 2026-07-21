@@ -28,6 +28,10 @@ from typing import Any, Optional
 import httpx
 
 from doclingllm.gateway.config import GatewaySettings
+from doclingllm.gateway.request_logging import (
+    log_model_inbound_response,
+    log_model_outbound_request,
+)
 from doclingllm.gateway.routing import StageRoute
 
 logger = logging.getLogger(__name__)
@@ -75,6 +79,13 @@ class ExternalApiClient:
             f"[IMP:7][ExternalApiClient.chat_completions][REQUEST] "
             f"stage={route.stage} url={route.request_url} model={route.model} [HTTP]"
         )
+        log_model_outbound_request(
+            logger,
+            stage=route.stage,
+            request_url=route.request_url,
+            payload=payload,
+            call_kind="chat_completions",
+        )
         response = self._client.post(
             route.request_url,
             headers=self._build_headers(route),
@@ -88,6 +99,13 @@ class ExternalApiClient:
             response.raise_for_status()
 
         data = response.json()
+        log_model_inbound_response(
+            logger,
+            stage=route.stage,
+            request_url=route.request_url,
+            response_data=data,
+            call_kind="chat_completions",
+        )
         logger.info(
             f"[IMP:9][ExternalApiClient.chat_completions][OK] "
             f"stage={route.stage} status={response.status_code} [VALUE]"
@@ -132,6 +150,13 @@ class ExternalApiClient:
             f"[IMP:7][ExternalApiClient.proxy_chat_completions][PROXY] "
             f"url={route.request_url} model={body.get('model')} [HTTP]"
         )
+        log_model_outbound_request(
+            logger,
+            stage=route.stage,
+            request_url=route.request_url,
+            payload=body,
+            call_kind="openai_proxy",
+        )
         response = self._client.post(
             route.request_url,
             headers=self._build_headers(route),
@@ -144,6 +169,13 @@ class ExternalApiClient:
             )
             response.raise_for_status()
         data = response.json()
+        log_model_inbound_response(
+            logger,
+            stage=route.stage,
+            request_url=route.request_url,
+            response_data=data,
+            call_kind="openai_proxy",
+        )
         logger.info(
             f"[IMP:9][ExternalApiClient.proxy_chat_completions][OK] status={response.status_code} [VALUE]"
         )

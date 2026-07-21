@@ -3,7 +3,6 @@ def _module_contract():
     pass
 # endregion MODULE_CONTRACT
 
-import base64
 import json
 import logging
 
@@ -24,7 +23,17 @@ pytest_plugins = ["tests.conftest_gateway"]
 def test_build_kserve_model_metadata_layout():
     metadata = build_kserve_model_metadata("layout")
     assert metadata["name"] == "layout"
-    assert metadata["outputs"][0]["name"] == "output"
+    assert len(metadata["inputs"]) == 2
+    assert metadata["inputs"][0]["name"] == "images"
+    assert metadata["inputs"][1]["name"] == "orig_target_sizes"
+    assert len(metadata["outputs"]) == 3
+    assert metadata["outputs"][0]["name"] == "labels"
+
+
+def test_build_kserve_model_metadata_ocr():
+    metadata = build_kserve_model_metadata("ocr")
+    assert metadata["inputs"][1]["name"] == "image"
+    assert metadata["outputs"][0]["name"] == "boxes"
 
 
 def test_decode_image_bytes_tensor(kserve_image_request):
@@ -34,13 +43,13 @@ def test_decode_image_bytes_tensor(kserve_image_request):
 
 def test_encode_kserve_response_roundtrip():
     parsed = {"text_regions": [{"text": "A", "bbox": [0, 0, 1, 1]}]}
-    response = encode_kserve_response("ocr", parsed)
+    response = encode_kserve_response("table", parsed)
     encoded = response["outputs"][0]["data"][0]
-    decoded = json.loads(base64.b64decode(encoded))
+    decoded = json.loads(__import__("base64").b64decode(encoded))
     assert decoded["text_regions"][0]["text"] == "A"
 
 
-def test_handle_kserve_infer_ocr(gateway_settings, kserve_image_request, caplog):
+def test_handle_kserve_infer_ocr(gateway_settings, kserve_ocr_request, caplog):
     caplog.set_level(logging.INFO)
     table = load_routing_table(gateway_settings.gateway_models_config_path, gateway_settings)
 
@@ -63,12 +72,50 @@ def test_handle_kserve_infer_ocr(gateway_settings, kserve_image_request, caplog)
 
     result = handle_kserve_infer(
         "ocr",
-        kserve_image_request,
+        kserve_ocr_request,
         client,
         table,
         gateway_settings,
     )
-    payload = json.loads(base64.b64decode(result["outputs"][0]["data"][0]))
-    assert payload["text_regions"][0]["text"] == "Doc"
+    output_names = {item["name"] for item in result["outputs"]}
+    assert output_names == {"boxes", "txts", "scores"}
+    boxes_output = next(item for item in result["outputs"] if item["name"] == "boxes")
+    assert boxes_output["datatype"] == "FP32"
     assert any("[IMP:9][handle_kserve_infer][OK]" in r.message for r in caplog.records)
+    client.close()
+
+
+def test_handle_kserve_infer_layout(gateway_settings, kserve_layout_request, caplog):
+    caplog.set_level(logging.INFO)
+    table = load_routing_table(gateway_settings.gateway_models_config_path, gateway_settings)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "content": '{"boxes":[{"label":"Title","bbox":[1,2,3,4]}]}',
+                        }
+                    }
+                ]
+            },
+        )
+
+    transport = httpx.MockTransport(handler)
+    client = ExternalApiClient(gateway_settings, client=httpx.Client(transport=transport))
+
+    result = handle_kserve_infer(
+        "layout",
+        kserve_layout_request,
+        client,
+        table,
+        gateway_settings,
+    )
+    output_names = [item["name"] for item in result["outputs"]]
+    assert output_names == ["labels", "boxes", "scores"]
+    labels_output = result["outputs"][0]
+    assert labels_output["datatype"] == "INT64"
+    assert labels_output["data"][0] == 10
     client.close()

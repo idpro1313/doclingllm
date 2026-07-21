@@ -26,6 +26,11 @@ from doclingllm.gateway.kserve import (
     handle_kserve_infer,
 )
 from doclingllm.gateway.openai_proxy import handle_openai_proxy
+from doclingllm.gateway.request_logging import (
+    log_docling_kserve_request,
+    log_docling_openai_request,
+    log_gateway_kserve_response,
+)
 from doclingllm.gateway.routing import RoutingTable, load_routing_table
 
 logger = logging.getLogger(__name__)
@@ -108,6 +113,7 @@ def create_app(
             raise HTTPException(status_code=404, detail=f"Unknown model: {model_name}")
         try:
             body = await request.json()
+            log_docling_kserve_request(logger, model_name, body)
             result = handle_kserve_infer(
                 model_name,
                 body,
@@ -115,6 +121,7 @@ def create_app(
                 state.routing_table,
                 state.settings,
             )
+            log_gateway_kserve_response(logger, model_name, result)
             return JSONResponse(content=result)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -125,6 +132,7 @@ def create_app(
     async def openai_chat_completions(request: Request) -> JSONResponse:
         state: GatewayState = app.state.gateway
         body = await request.json()
+        log_docling_openai_request(logger, body)
         try:
             result = handle_openai_proxy(
                 body,

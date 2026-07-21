@@ -3,6 +3,7 @@
 import base64
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from doclingllm.gateway.config import GatewaySettings
@@ -50,5 +51,48 @@ def kserve_image_request() -> dict:
                 "datatype": "BYTES",
                 "data": [TINY_PNG_B64],
             }
+        ]
+    }
+
+
+@pytest.fixture
+def kserve_ocr_request() -> dict:
+    tiny_rgb = np.zeros((1, 8, 8, 3), dtype=np.uint8)
+    return {
+        "inputs": [
+            {
+                "name": "lang_type",
+                "shape": [1, 1],
+                "datatype": "BYTES",
+                "data": ["en"],
+            },
+            {
+                "name": "image",
+                "shape": [1, 8, 8, 3],
+                "datatype": "UINT8",
+                "data": tiny_rgb.reshape(-1).tolist(),
+            },
+        ]
+    }
+
+
+@pytest.fixture
+def kserve_layout_request() -> dict:
+    pixel_values = np.zeros((1, 3, 8, 8), dtype=np.float32)
+    orig_target_sizes = np.array([[8, 8]], dtype=np.int64)
+    return {
+        "inputs": [
+            {
+                "name": "images",
+                "shape": [1, 3, 8, 8],
+                "datatype": "FP32",
+                "data": pixel_values.reshape(-1).tolist(),
+            },
+            {
+                "name": "orig_target_sizes",
+                "shape": [1, 2],
+                "datatype": "INT64",
+                "data": orig_target_sizes.reshape(-1).tolist(),
+            },
         ]
     }
