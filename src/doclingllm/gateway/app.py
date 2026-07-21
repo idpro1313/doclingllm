@@ -16,7 +16,7 @@ from contextlib import asynccontextmanager
 from typing import Any, Optional
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 from doclingllm.gateway.client import ExternalApiClient
 from doclingllm.gateway.config import GatewaySettings, load_gateway_settings
@@ -25,6 +25,7 @@ from doclingllm.gateway.kserve import (
     build_kserve_model_metadata,
     handle_kserve_infer,
 )
+from doclingllm.gateway.kserve_binary import parse_kserve_infer_request
 from doclingllm.gateway.openai_proxy import handle_openai_proxy
 from doclingllm.gateway.request_logging import (
     log_docling_kserve_request,
@@ -107,12 +108,13 @@ def create_app(
         return JSONResponse(content={"ready": True})
 
     @app.post("/v2/models/{model_name}/infer")
-    async def kserve_infer(model_name: str, request: Request) -> JSONResponse:
+    async def kserve_infer(model_name: str, request: Request) -> Response:
         state: GatewayState = app.state.gateway
         if model_name not in KSERVE_MODEL_TO_STAGE:
             raise HTTPException(status_code=404, detail=f"Unknown model: {model_name}")
         try:
-            body = await request.json()
+            raw_body = await request.body()
+            body = parse_kserve_infer_request(raw_body, request.headers)
             log_docling_kserve_request(logger, model_name, body)
             result = handle_kserve_infer(
                 model_name,
@@ -124,6 +126,9 @@ def create_app(
             log_gateway_kserve_response(logger, model_name, result)
             return JSONResponse(content=result)
         except ValueError as exc:
+            logger.error(
+                f"[IMP:10][kserve_infer][BAD_REQUEST] model={model_name} error={exc} [FATAL]"
+            )
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
