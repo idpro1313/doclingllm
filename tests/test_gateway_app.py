@@ -13,6 +13,26 @@ from doclingllm.gateway.routing import load_routing_table
 pytest_plugins = ["tests.conftest_gateway"]
 
 
+def test_kserve_infer_upstream_connect_error_returns_502(
+    gateway_settings, full_routing_yaml, kserve_ocr_request
+):
+    table = load_routing_table(full_routing_yaml, gateway_settings)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("SSL: UNEXPECTED_EOF_WHILE_READING", request=request)
+
+    transport = httpx.MockTransport(handler)
+    client = ExternalApiClient(gateway_settings, client=httpx.Client(transport=transport))
+    app = create_app(settings=gateway_settings, routing_table=table, client=client)
+
+    with TestClient(app, raise_server_exceptions=False) as test_client:
+        response = test_client.post("/v2/models/ocr/infer", json=kserve_ocr_request)
+        assert response.status_code == 502
+        assert "Upstream" in response.json()["detail"]
+
+    client.close()
+
+
 def test_health_endpoint(gateway_settings, full_routing_yaml):
     table = load_routing_table(full_routing_yaml, gateway_settings)
 

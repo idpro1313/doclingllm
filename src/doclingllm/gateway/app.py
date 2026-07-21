@@ -2,13 +2,13 @@
 ## @modulecontract
 ## @purpose ASGI application exposing health, KServe v2 infer, and OpenAI proxy endpoints for docling-serve integration.
 ## @changes
-## LAST_CHANGE: [v0.2.0 Slice S4-S5 – FastAPI app with lifespan and route registration.]
+## LAST_CHANGE: [v0.2.12 – map UpstreamApiError from external TLS/connect failures to HTTP 502.]
 ## @modulemap
 ## FUNC 10[Application factory] => create_app
 def _module_contract():
     pass
 # endregion MODULE_CONTRACT
-# GREP_SUMMARY: FastAPI, app, health, KServe, OpenAI, uvicorn, gateway server
+# GREP_SUMMARY: FastAPI, app, health, KServe, OpenAI, uvicorn, gateway server, UpstreamApiError, 502
 # STRUCTURE: ▶ create_app → ◇ lifespan load config/routing → ⊕ register routes → ⎋ FastAPI
 
 import logging
@@ -18,7 +18,7 @@ from typing import Any, Optional
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
 
-from doclingllm.gateway.client import ExternalApiClient
+from doclingllm.gateway.client import ExternalApiClient, UpstreamApiError
 from doclingllm.gateway.config import GatewaySettings, load_gateway_settings
 from doclingllm.gateway.kserve import (
     KSERVE_MODEL_TO_STAGE,
@@ -132,6 +132,11 @@ def create_app(
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except UpstreamApiError as exc:
+            logger.critical(
+                f"[IMP:10][kserve_infer][UPSTREAM] model={model_name} error={exc} [FATAL]"
+            )
+            raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
     @app.post("/v1/chat/completions")
     async def openai_chat_completions(request: Request) -> JSONResponse:
@@ -146,6 +151,11 @@ def create_app(
                 state.settings,
             )
             return JSONResponse(content=result)
+        except UpstreamApiError as exc:
+            logger.critical(
+                f"[IMP:10][openai_chat_completions][UPSTREAM] {exc} [FATAL]"
+            )
+            raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
         except Exception as exc:
             logger.critical(
                 f"[IMP:10][openai_chat_completions][ERROR] {exc} [FATAL]"

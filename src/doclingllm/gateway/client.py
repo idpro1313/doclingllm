@@ -10,16 +10,17 @@
 ## - Authorization header is NEVER logged.
 ## - chat_completions raises httpx.HTTPStatusError on 4xx/5xx after logging IMP:10.
 ## @changes
-## LAST_CHANGE: [v0.2.0 Slice S2 – ExternalApiClient with vision and proxy modes.]
+## LAST_CHANGE: [v0.2.12 – UpstreamApiError for ConnectError/TLS; trust_env proxy via httpx.]
 ## @modulemap
 ## CLASS 10[Outbound HTTP client] => ExternalApiClient
+## CLASS 8[Upstream transport/HTTP failure] => UpstreamApiError
 ## @usecases
 ## - [ExternalApiClient.chat_completions]: Gateway handler → POST external API → JSON response
 def _module_contract():
     pass
 # endregion MODULE_CONTRACT
-# GREP_SUMMARY: httpx, client, OpenAI, chat completions, Bearer, vision, external API
-# STRUCTURE: ▶ StageRoute ┌build headers/body┐ → ⚡ POST → ◇ json → ⎋ dict
+# GREP_SUMMARY: httpx, client, OpenAI, chat completions, Bearer, vision, external API, UpstreamApiError, proxy
+# STRUCTURE: ▶ StageRoute ┌build headers/body┐ → ⚡ POST → ◇ RequestError? UpstreamApiError : json → ⎋ dict
 
 import base64
 import logging
@@ -37,13 +38,28 @@ from doclingllm.gateway.routing import StageRoute
 logger = logging.getLogger(__name__)
 
 
+# region CLASS_UpstreamApiError [DOMAIN(8): HTTPClient; CONCEPT(9): UpstreamFailure; TECH(8): Exception]
+## @purpose Signal gateway handlers that the external vision/text API is unreachable or failed transport.
+class UpstreamApiError(Exception):
+    def __init__(self, message: str, *, status_code: int = 502) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+
+
+# endregion CLASS_UpstreamApiError
+
+
 # region CLASS_ExternalApiClient [DOMAIN(9): HTTPClient; CONCEPT(9): Integration; TECH(9): httpx]
 ## @purpose Centralize outbound HTTP to vision and text backends with consistent headers and error handling.
 class ExternalApiClient:
     def __init__(self, settings: GatewaySettings, client: Optional[httpx.Client] = None):
         self._settings = settings
         self._owns_client = client is None
-        self._client = client or httpx.Client(timeout=settings.gateway_request_timeout)
+        # BUG_FIX_CONTEXT: trust_env=True so HTTP_PROXY/HTTPS_PROXY from container env are honored for Cloud.ru TLS egress.
+        self._client = client or httpx.Client(
+            timeout=settings.gateway_request_timeout,
+            trust_env=True,
+        )
 
     def close(self) -> None:
         if self._owns_client:
@@ -86,11 +102,21 @@ class ExternalApiClient:
             payload=payload,
             call_kind="chat_completions",
         )
-        response = self._client.post(
-            route.request_url,
-            headers=self._build_headers(route),
-            json=payload,
-        )
+        try:
+            response = self._client.post(
+                route.request_url,
+                headers=self._build_headers(route),
+                json=payload,
+            )
+        except httpx.RequestError as exc:
+            # BUG_FIX_CONTEXT: SSL UNEXPECTED_EOF / ConnectError previously bubbled as ASGI 500; map to UpstreamApiError → 502.
+            logger.critical(
+                f"[IMP:10][ExternalApiClient.chat_completions][TRANSPORT] "
+                f"stage={route.stage} url={route.request_url} error={exc} [FATAL]"
+            )
+            raise UpstreamApiError(
+                f"Upstream transport failure for {route.request_url}: {exc}"
+            ) from exc
         if response.status_code >= 400:
             logger.critical(
                 f"[IMP:10][ExternalApiClient.chat_completions][HTTP_ERROR] "
@@ -157,11 +183,20 @@ class ExternalApiClient:
             payload=body,
             call_kind="openai_proxy",
         )
-        response = self._client.post(
-            route.request_url,
-            headers=self._build_headers(route),
-            json=body,
-        )
+        try:
+            response = self._client.post(
+                route.request_url,
+                headers=self._build_headers(route),
+                json=body,
+            )
+        except httpx.RequestError as exc:
+            logger.critical(
+                f"[IMP:10][ExternalApiClient.proxy_chat_completions][TRANSPORT] "
+                f"url={route.request_url} error={exc} [FATAL]"
+            )
+            raise UpstreamApiError(
+                f"Upstream transport failure for {route.request_url}: {exc}"
+            ) from exc
         if response.status_code >= 400:
             logger.critical(
                 f"[IMP:10][ExternalApiClient.proxy_chat_completions][HTTP_ERROR] "

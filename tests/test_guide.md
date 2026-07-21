@@ -24,7 +24,8 @@ python -m pytest tests/ -s -v
 | `test_gateway_client.py` | `[IMP:9][ExternalApiClient.chat_completions][OK]` |
 | `test_gateway_kserve.py` | `[IMP:9][handle_kserve_infer][OK]` |
 | `test_gateway_openai_proxy.py` | `[IMP:9][handle_openai_proxy][OK]` |
-| `test_gateway_app.py` | `[IMP:9][create_app][STARTUP]` (lifespan) |
+| `test_gateway_app.py` | `[IMP:9][create_app][STARTUP]` (lifespan); upstream ConnectError → 502 |
+| `test_gateway_kserve.py` | OCR boxes shape `(N,4,2)` без batch axis |
 
 ## Anti-Loop
 

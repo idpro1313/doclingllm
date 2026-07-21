@@ -4,6 +4,8 @@
 # Важно (docling-jobkit): preset ID в default_*_preset при lookup "default" часто
 # трактуется как kind docling, не как custom preset. Custom presets с ключом
 # "default" (и для OCR — "auto") перезаписывают registry после init.
+#
+# VLM/API: url/params ТОЛЬКО в engine_options (ApiVlmEngine), не в api_overrides.
 
 enable_remote_services: true
 load_models_at_boot: false
@@ -56,8 +58,8 @@ custom_picture_classification_presets:
       transport: http
       model_name: picture_classifier
     model_spec:
-      name: document_figure_classifier_v2
-      repo_id: docling-project/docling-document-picture-classifier-v2
+      name: document_figure_classifier_v2_5
+      repo_id: docling-project/DocumentFigureClassifier-v2.5
   remote_pic_class:
     engine_options:
       engine_type: api_kserve_v2
@@ -65,8 +67,8 @@ custom_picture_classification_presets:
       transport: http
       model_name: picture_classifier
     model_spec:
-      name: document_figure_classifier_v2
-      repo_id: docling-project/docling-document-picture-classifier-v2
+      name: document_figure_classifier_v2_5
+      repo_id: docling-project/DocumentFigureClassifier-v2.5
 
 # VLM pipeline → OpenAI-compatible proxy on gateway
 default_vlm_preset: remote_vlm
@@ -74,12 +76,16 @@ custom_vlm_presets:
   remote_vlm:
     engine_options:
       engine_type: api
+      url: "http://model-gateway:8080/v1/chat/completions"
+      params:
+        model: deepseek-ai/DeepSeek-OCR-2
+      timeout: 120.0
+      concurrency: 1
     model_spec:
-      api_overrides:
-        api:
-          url: "http://model-gateway:8080/v1/chat/completions"
-          params:
-            model: deepseek-ai/DeepSeek-OCR-2
+      name: DeepSeek-OCR-2-Remote
+      default_repo_id: deepseek-ai/DeepSeek-OCR-2
+      prompt: "Convert this page to docling."
+      response_format: markdown
 
 # Picture description
 default_picture_description_preset: remote_pic_desc
@@ -87,12 +93,17 @@ custom_picture_description_presets:
   remote_pic_desc:
     engine_options:
       engine_type: api
+      url: "http://model-gateway:8080/v1/chat/completions"
+      params:
+        model: deepseek-ai/DeepSeek-OCR-2
+      timeout: 120.0
+      concurrency: 1
     model_spec:
-      api_overrides:
-        api:
-          url: "http://model-gateway:8080/v1/chat/completions"
-          params:
-            model: deepseek-ai/DeepSeek-OCR-2
+      name: DeepSeek-OCR-2-PictureDesc
+      default_repo_id: deepseek-ai/DeepSeek-OCR-2
+      prompt: "Describe this picture from a document. Be concise and accurate."
+      response_format: plain
+    prompt: "Describe this picture from a document. Be concise and accurate."
 
 # Code/formula → text backend via gateway OpenAI proxy
 default_code_formula_preset: remote_code_formula
@@ -100,12 +111,16 @@ custom_code_formula_presets:
   remote_code_formula:
     engine_options:
       engine_type: api
+      url: "http://model-gateway:8080/v1/chat/completions"
+      params:
+        model: minimax-m2.7
+      timeout: 120.0
+      concurrency: 1
     model_spec:
-      api_overrides:
-        api:
-          url: "http://model-gateway:8080/v1/chat/completions"
-          params:
-            model: minimax-m2.7
+      name: Minimax-CodeFormula
+      default_repo_id: minimax-m2.7
+      prompt: "Transcribe the code or mathematical formula accurately."
+      response_format: plain
 
 allowed_vlm_presets:
   - remote_vlm

@@ -13,11 +13,48 @@ from doclingllm.gateway.kserve import (
     build_kserve_model_metadata,
     decode_image_from_kserve_request,
     encode_kserve_response,
+    encode_object_detection_response,
+    encode_ocr_kserve_response,
     handle_kserve_infer,
 )
 from doclingllm.gateway.routing import load_routing_table
 
 pytest_plugins = ["tests.conftest_gateway"]
+
+
+def test_encode_ocr_kserve_response_shape_without_batch_axis():
+    result = encode_ocr_kserve_response(
+        "ocr",
+        {
+            "text_regions": [
+                {"text": "A", "bbox": [0, 0, 10, 5], "score": 0.9},
+                {"text": "B", "bbox": [1, 1, 11, 6], "score": 0.8},
+            ]
+        },
+    )
+    boxes = next(item for item in result["outputs"] if item["name"] == "boxes")
+    txts = next(item for item in result["outputs"] if item["name"] == "txts")
+    scores = next(item for item in result["outputs"] if item["name"] == "scores")
+    assert boxes["shape"] == [2, 4, 2]
+    assert txts["shape"] == [2]
+    assert scores["shape"] == [2]
+    assert txts["data"] == ["A", "B"]
+
+
+def test_encode_object_detection_per_batch_item():
+    result = encode_object_detection_response(
+        "layout",
+        [
+            [{"label": "title", "bbox": [1, 2, 3, 4], "score": 0.9}],
+            [{"label": "text", "bbox": [5, 6, 7, 8], "score": 0.7}],
+        ],
+    )
+    labels = next(item for item in result["outputs"] if item["name"] == "labels")
+    boxes = next(item for item in result["outputs"] if item["name"] == "boxes")
+    assert labels["shape"] == [2, 1]
+    assert boxes["shape"] == [2, 1, 4]
+    assert boxes["data"][0:4] == [1.0, 2.0, 3.0, 4.0]
+    assert boxes["data"][4:8] == [5.0, 6.0, 7.0, 8.0]
 
 
 def test_build_kserve_model_metadata_layout():
@@ -81,6 +118,11 @@ def test_handle_kserve_infer_ocr(gateway_settings, kserve_ocr_request, caplog):
     assert output_names == {"boxes", "txts", "scores"}
     boxes_output = next(item for item in result["outputs"] if item["name"] == "boxes")
     assert boxes_output["datatype"] == "FP32"
+    assert boxes_output["shape"] == [1, 4, 2]
+    txts_output = next(item for item in result["outputs"] if item["name"] == "txts")
+    assert txts_output["shape"] == [1]
+    scores_output = next(item for item in result["outputs"] if item["name"] == "scores")
+    assert scores_output["shape"] == [1]
     assert any("[IMP:9][handle_kserve_infer][OK]" in r.message for r in caplog.records)
     client.close()
 

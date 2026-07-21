@@ -18,6 +18,7 @@ def test_docker_compose_declares_remote_services():
     assert 'DOCLING_SERVE_ENABLE_UI: "true"' in text
     assert "model-gateway" in text
     assert "docling-serve" in text
+    assert "HTTPS_PROXY" in text
 
 
 def test_docling_serve_yaml_points_to_gateway():
@@ -41,6 +42,19 @@ def test_docling_serve_yaml_points_to_gateway():
     pic_default = data["custom_picture_classification_presets"]["default"]
     assert pic_default["engine_options"]["engine_type"] == "api_kserve_v2"
     assert "kind" not in pic_default
+    assert (
+        pic_default["model_spec"]["repo_id"]
+        == "docling-project/DocumentFigureClassifier-v2.5"
+    )
+    vlm = data["custom_vlm_presets"]["remote_vlm"]
+    assert "url" in vlm["engine_options"]
+    assert "model-gateway:8080" in vlm["engine_options"]["url"]
+    assert "api_overrides" not in vlm.get("model_spec", {})
+    pic_desc = data["custom_picture_description_presets"]["remote_pic_desc"]
+    assert "url" in pic_desc["engine_options"]
+    code_formula = data["custom_code_formula_presets"]["remote_code_formula"]
+    assert "url" in code_formula["engine_options"]
+    assert code_formula["engine_options"]["params"]["model"] == "minimax-m2.7"
 
 
 def test_env_defaults_has_required_keys():

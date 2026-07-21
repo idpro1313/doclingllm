@@ -6,6 +6,11 @@ services:
     container_name: doclingllm-gateway
     env_file:
       - .env
+    environment:
+      # Optional corporate proxy for Cloud.ru HTTPS (set in deploy/.env)
+      HTTP_PROXY: ${HTTP_PROXY:-}
+      HTTPS_PROXY: ${HTTPS_PROXY:-}
+      NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,model-gateway,docling-serve}
     volumes:
       - ./config/gateway-models.yaml:/config/gateway-models.yaml:ro
     networks:

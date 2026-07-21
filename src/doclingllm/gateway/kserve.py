@@ -5,7 +5,7 @@
 ## @links [USES_API(9): doclingllm.gateway.client.ExternalApiClient]
 ## @links [USES_API(8): doclingllm.gateway.parsers.get_parser]
 ## @changes
-## LAST_CHANGE: [v0.2.8 – stage-specific KServe metadata and tensor encode/decode for layout OD, OCR, picture_classifier.]
+## LAST_CHANGE: [v0.2.12 – OCR boxes shape (N,4,2); layout per-batch OD encode without cross-image merge.]
 ## @modulemap
 ## FUNC 10[Handle KServe infer request] => handle_kserve_infer
 ## FUNC 8[Build model metadata by name] => build_kserve_model_metadata
@@ -13,7 +13,7 @@
 def _module_contract():
     pass
 # endregion MODULE_CONTRACT
-# GREP_SUMMARY: KServe v2, infer, tensor, object detection, layout, OCR, picture_classifier, metadata
+# GREP_SUMMARY: KServe v2, infer, tensor, object detection, layout, OCR, picture_classifier, metadata, OCR shape
 # STRUCTURE: ▶ model_name → ◇ metadata|infer branch → ⚡ vision_inference → ◇ parser → ⊕ tensor encode → ⎋ KServe JSON
 
 import base64
@@ -412,19 +412,15 @@ def encode_kserve_response(model_name: str, parsed: dict[str, Any]) -> dict[str,
 # endregion FUNC_encode_kserve_response
 
 
-# region FUNC_encode_object_detection_response [DOMAIN(9): Layout; CONCEPT(9): ObjectDetection; TECH(9): numpy]
-## @purpose Encode layout parser output as KServe labels/boxes/scores tensors for docling OD engine.
-## @complexity 6
-def encode_object_detection_response(
-    model_name: str,
-    parsed: dict[str, Any],
-    batch_size: int,
-) -> dict[str, Any]:
-    boxes_raw = parsed.get("boxes", [])
+# region FUNC__normalize_detection_items [DOMAIN(7): Layout; CONCEPT(7): DetectionNormalize; TECH(7): list]
+## @purpose Convert free-form parser box dicts into typed label/box/score triples for OD encoding.
+## @complexity 3
+def _normalize_detection_items(
+    boxes_raw: list[Any],
+) -> tuple[list[int], list[list[float]], list[float]]:
     labels_list: list[int] = []
     boxes_list: list[list[float]] = []
     scores_list: list[float] = []
-
     for item in boxes_raw:
         if not isinstance(item, dict):
             continue
@@ -434,16 +430,42 @@ def encode_object_detection_response(
         labels_list.append(_layout_label_to_id(item.get("label", "text")))
         boxes_list.append([float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3])])
         scores_list.append(float(item.get("score", DEFAULT_DETECTION_SCORE)))
+    return labels_list, boxes_list, scores_list
 
-    count = len(labels_list)
-    labels = np.array([labels_list], dtype=np.int64) if count else np.zeros((batch_size, 0), dtype=np.int64)
-    boxes = np.array([boxes_list], dtype=np.float32) if count else np.zeros((batch_size, 0, 4), dtype=np.float32)
-    scores = np.array([scores_list], dtype=np.float32) if count else np.zeros((batch_size, 0), dtype=np.float32)
 
-    if labels.shape[0] != batch_size:
-        labels = np.repeat(labels, batch_size, axis=0) if batch_size > 1 else labels
-        boxes = np.repeat(boxes, batch_size, axis=0) if batch_size > 1 else boxes
-        scores = np.repeat(scores, batch_size, axis=0) if batch_size > 1 else scores
+# endregion FUNC__normalize_detection_items
+
+
+# region FUNC_encode_object_detection_response [DOMAIN(9): Layout; CONCEPT(9): ObjectDetection; TECH(9): numpy]
+## @purpose Encode per-image layout detections as padded KServe labels/boxes/scores batch tensors.
+## @complexity 7
+def encode_object_detection_response(
+    model_name: str,
+    batch_detections: list[list[dict[str, Any]]],
+) -> dict[str, Any]:
+    # BUG_FIX_CONTEXT: previously merged all batch images into one detection list then np.repeat —
+    # that duplicated wrong boxes across batch items. Encode each image separately and pad to max N.
+    batch_size = len(batch_detections)
+    if batch_size == 0:
+        batch_size = 1
+        batch_detections = [[]]
+
+    normalized: list[tuple[list[int], list[list[float]], list[float]]] = [
+        _normalize_detection_items(items) for items in batch_detections
+    ]
+    max_count = max((len(item[0]) for item in normalized), default=0)
+
+    labels = np.zeros((batch_size, max_count), dtype=np.int64)
+    boxes = np.zeros((batch_size, max_count, 4), dtype=np.float32)
+    scores = np.zeros((batch_size, max_count), dtype=np.float32)
+
+    for batch_index, (labels_list, boxes_list, scores_list) in enumerate(normalized):
+        count = len(labels_list)
+        if count == 0:
+            continue
+        labels[batch_index, :count] = np.asarray(labels_list, dtype=np.int64)
+        boxes[batch_index, :count] = np.asarray(boxes_list, dtype=np.float32)
+        scores[batch_index, :count] = np.asarray(scores_list, dtype=np.float32)
 
     return {
         "model_name": model_name,
@@ -495,15 +517,17 @@ def encode_ocr_kserve_response(model_name: str, parsed: dict[str, Any]) -> dict[
         texts.append(str(region.get("text", "")))
         scores.append(float(region.get("score", DEFAULT_DETECTION_SCORE)))
 
+    # BUG_FIX_CONTEXT: docling KserveV2OcrModel._create_text_cells expects boxes (N,4,2) and
+    # zip(boxes, txts, scores) without a leading batch axis; (1,N,4,2) broke coordinate extraction.
     count = len(box_tensors)
     if count == 0:
-        boxes = np.zeros((1, 0, 4, 2), dtype=np.float32)
-        txts = np.array([[]], dtype=object)
-        score_arr = np.zeros((1, 0), dtype=np.float32)
+        boxes = np.zeros((0, 4, 2), dtype=np.float32)
+        txts = np.array([], dtype=object)
+        score_arr = np.zeros((0,), dtype=np.float32)
     else:
-        boxes = np.array([box_tensors], dtype=np.float32)
-        txts = np.array([texts], dtype=object)
-        score_arr = np.array([scores], dtype=np.float32)
+        boxes = np.asarray(box_tensors, dtype=np.float32)
+        txts = np.asarray(texts, dtype=object)
+        score_arr = np.asarray(scores, dtype=np.float32)
 
     txt_payload = [str(value) for value in txts.reshape(-1).tolist()]
 
@@ -592,9 +616,8 @@ def handle_kserve_infer(
         orig_target_sizes = tensors.get("orig_target_sizes")
         if pixel_values is None or orig_target_sizes is None:
             raise ValueError("Layout infer requires images and orig_target_sizes tensors")
-        batch_size = int(pixel_values.shape[0])
         png_list = _pixel_values_batch_to_png_list(pixel_values, orig_target_sizes)
-        merged_boxes: list[dict[str, Any]] = []
+        batch_detections: list[list[dict[str, Any]]] = []
         for index, image_bytes in enumerate(png_list):
             logger.info(
                 f"[IMP:7][handle_kserve_infer][LAYOUT_BATCH] item={index} bytes={len(image_bytes)} [IO]"
@@ -606,12 +629,11 @@ def handle_kserve_infer(
             )
             parser = get_parser(route.response_parser)
             parsed = parser(assistant_text)
-            merged_boxes.extend(parsed.get("boxes", []))
-        response = encode_object_detection_response(
-            model_name,
-            {"boxes": merged_boxes},
-            batch_size=batch_size,
-        )
+            boxes_raw = parsed.get("boxes", [])
+            batch_detections.append(
+                [item for item in boxes_raw if isinstance(item, dict)]
+            )
+        response = encode_object_detection_response(model_name, batch_detections)
     elif model_name == "ocr":
         image_bytes = decode_image_from_kserve_request(request_body)
         logger.info(

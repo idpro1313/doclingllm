@@ -395,12 +395,8 @@ pyyaml>=6.0           # gateway-models.yaml loading
 
 **Критерии следующего slice:** C1 immutability; C2 YAML schema; C3 tensor shapes; C5 docs sync.
 
-**Superposition (ожидает collapse оператора):**
+**Collapse (оператор 2026-07-22):** полный фикс B+C + иммунизация SSL/502 (без binary response encoding — JSON fallback OK).
 
-| ID | Scope |
-|----|-------|
-| A | Только CRITICAL: YAML VLM* + gateway_api_contract |
-| B | CRITICAL + HIGH: A + OCR shapes + repo_id + tests |
-| C | Full hardening: B + layout batch + binary response |
+**Реализовано в 0.2.12:** YAML `engine_options.url`; OCR `(N,4,2)`; layout per-batch OD; `DocumentFigureClassifier-v2.5`; `UpstreamApiError`→502; proxy env; docs sync.
 
 $END_DEV_PLAN
