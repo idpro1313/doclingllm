@@ -19,6 +19,9 @@ def test_quiet_access_filter_contract_in_overlay():
     text = path.read_text(encoding="utf-8")
     assert "class QuietAccessFilter" in text
     assert "/v1/status/poll/" in text
+    assert "/ui/assets/" in text
+    assert "/ui/gradio_api/" in text
+    assert "QuietTenantPollFilter" in text
     assert '"httpx"' in text
     assert '"httpcore"' in text
 

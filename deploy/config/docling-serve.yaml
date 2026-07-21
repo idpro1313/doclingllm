@@ -70,40 +70,49 @@ custom_picture_classification_presets:
       name: document_figure_classifier_v2_5
       repo_id: docling-project/DocumentFigureClassifier-v2.5
 
-# VLM pipeline → OpenAI-compatible proxy on gateway
+# VLM pipeline → OpenAI-compatible proxy on gateway.
+# Gradio UI does not send vlm_pipeline_preset; jobkit falls back to granite_docling /
+# "default" — overwrite those IDs so UI "Vlm" never loads local HF weights.
 default_vlm_preset: remote_vlm
+allowed_vlm_engines:
+  - api
 custom_vlm_presets:
-  remote_vlm:
+  remote_vlm: &remote_vlm_preset
     engine_options:
       engine_type: api
       url: "http://model-gateway:8080/v1/chat/completions"
       params:
-        model: qwen3.6-35b-a3b
+        # Gateway rewrites to VISION_MODEL from env; value here is a placeholder for docling.
+        model: remote-vision
       timeout: 120.0
       concurrency: 1
     model_spec:
-      name: Qwen3.6-35B-A3B-Remote
-      default_repo_id: Qwen/Qwen3.6-35B-A3B
+      name: Remote-Vision-VLM
+      default_repo_id: remote-vision
       prompt: "Convert this page to docling."
       response_format: markdown
+  default: *remote_vlm_preset
+  granite_docling: *remote_vlm_preset
 
 # Picture description
 default_picture_description_preset: remote_pic_desc
 custom_picture_description_presets:
-  remote_pic_desc:
+  default: &remote_pic_desc_preset
     engine_options:
       engine_type: api
       url: "http://model-gateway:8080/v1/chat/completions"
       params:
-        model: qwen3.6-35b-a3b
+        model: remote-vision
       timeout: 120.0
       concurrency: 1
     model_spec:
-      name: Qwen3.6-35B-A3B-PictureDesc
-      default_repo_id: Qwen/Qwen3.6-35B-A3B
+      name: Remote-Vision-PictureDesc
+      default_repo_id: remote-vision
       prompt: "Describe this picture from a document. Be concise and accurate."
       response_format: plain
     prompt: "Describe this picture from a document. Be concise and accurate."
+  remote_pic_desc: *remote_pic_desc_preset
+  smolvlm: *remote_pic_desc_preset
 
 # Code/formula → text backend via gateway OpenAI proxy
 default_code_formula_preset: remote_code_formula
@@ -122,9 +131,14 @@ custom_code_formula_presets:
       prompt: "Transcribe the code or mathematical formula accurately."
       response_format: plain
 
+# Include granite_docling/default aliases so Gradio VLM path is allowed by policy.
 allowed_vlm_presets:
   - remote_vlm
+  - default
+  - granite_docling
 allowed_picture_description_presets:
   - remote_pic_desc
+  - default
+  - smolvlm
 allowed_code_formula_presets:
   - remote_code_formula

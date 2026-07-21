@@ -23,15 +23,27 @@ _log_context: contextvars.ContextVar[dict[str, Any]] = contextvars.ContextVar(
 _QUIET_ACCESS_SUBSTRINGS = (
     "/v1/status/poll/",
     "/health",
+    "/ui/assets/",
+    "/ui/static/",
+    "/ui/gradio_api/",
+    "/ui/favicon",
 )
 
 
 class QuietAccessFilter(logging.Filter):
-    """Drop high-frequency health/poll access lines from uvicorn.access."""
+    """Drop Gradio asset/queue noise and health/poll access lines from uvicorn.access."""
 
     def filter(self, record: logging.LogRecord) -> bool:
         message = record.getMessage()
         return not any(fragment in message for fragment in _QUIET_ACCESS_SUBSTRINGS)
+
+
+class QuietTenantPollFilter(logging.Filter):
+    """Drop per-poll TENANT_ID header extraction spam (keeps task-create lines)."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        message = record.getMessage()
+        return "[TENANT_ID] Extracted tenant_id from header" not in message
 
 
 class ColoredLogFormatter(logging.Formatter):
@@ -188,3 +200,6 @@ def setup_logging(
         quiet_logger = logging.getLogger(quiet_name)
         quiet_logger.setLevel(logging.WARNING)
         quiet_logger.propagate = True
+
+    app_logger = logging.getLogger("docling_serve.app")
+    app_logger.addFilter(QuietTenantPollFilter())

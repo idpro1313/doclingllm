@@ -50,8 +50,11 @@ def test_docling_serve_yaml_points_to_gateway():
     assert "url" in vlm["engine_options"]
     assert "model-gateway:8080" in vlm["engine_options"]["url"]
     assert "api_overrides" not in vlm.get("model_spec", {})
+    assert data["custom_vlm_presets"]["granite_docling"]["engine_options"]["engine_type"] == "api"
+    assert data["allowed_vlm_engines"] == ["api"]
     pic_desc = data["custom_picture_description_presets"]["remote_pic_desc"]
     assert "url" in pic_desc["engine_options"]
+    assert pic_desc["engine_options"]["params"]["model"] == "remote-vision"
     code_formula = data["custom_code_formula_presets"]["remote_code_formula"]
     assert "url" in code_formula["engine_options"]
     assert code_formula["engine_options"]["params"]["model"] == "minimax-m2.7"

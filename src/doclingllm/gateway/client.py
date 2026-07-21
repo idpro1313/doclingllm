@@ -170,8 +170,9 @@ class ExternalApiClient:
         body: dict[str, Any],
     ) -> dict[str, Any]:
         """Pass-through OpenAI request body to external backend."""
-        if "model" not in body:
-            body = {**body, "model": route.model}
+        # BUG_FIX_CONTEXT: docling-serve.yaml may send placeholder model (remote-vision);
+        # always force the env-resolved route.model (VISION_MODEL / TEXT_MODEL).
+        body = {**body, "model": route.model}
         logger.info(
             f"[IMP:7][ExternalApiClient.proxy_chat_completions][PROXY] "
             f"url={route.request_url} model={body.get('model')} [HTTP]"

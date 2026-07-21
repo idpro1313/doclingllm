@@ -2,14 +2,14 @@
 ## @modulecontract
 ## @purpose Proxy OpenAI-compatible /v1/chat/completions requests from docling-serve to Cloud.ru or LAN minimax backends.
 ## @changes
-## LAST_CHANGE: [v0.2.0 Slice S5 – OpenAI proxy with model-based route selection.]
+## LAST_CHANGE: [v0.2.20 – image chat → vlm stage; always rewrite model to route.model.]
 ## @modulemap
 ## FUNC 9[Proxy chat/completions body] => handle_openai_proxy
 ## FUNC 7[Select route from request body] => select_openai_route
 def _module_contract():
     pass
 # endregion MODULE_CONTRACT
-# GREP_SUMMARY: OpenAI proxy, chat completions, pass-through, vlm, code_formula
+# GREP_SUMMARY: OpenAI proxy, chat completions, pass-through, vlm, code_formula, model rewrite
 # STRUCTURE: ▶ JSON body → ◇ select route → ⚡ proxy/post → ⎋ OpenAI JSON
 
 import logging
@@ -52,8 +52,24 @@ def select_openai_route(
     if settings.text_model.lower() in model or "minimax" in model:
         return resolve_stage_route("code_formula", table, settings)
 
+    # BUG_FIX_CONTEXT: previously any image → picture_description, so VlmPipeline
+    # "Convert this page to docling" never hit the vlm stage. Prefer vlm for page
+    # convert; picture_description only when prompt clearly asks to describe a figure.
     if message_has_image(messages):
-        return resolve_stage_route("picture_description", table, settings)
+        joined = " ".join(
+            part.get("text", "")
+            for message in messages
+            if isinstance(message, dict)
+            for part in (
+                message.get("content")
+                if isinstance(message.get("content"), list)
+                else [{"type": "text", "text": str(message.get("content", ""))}]
+            )
+            if isinstance(part, dict) and part.get("type") == "text"
+        ).lower()
+        if "describe" in joined and "picture" in joined:
+            return resolve_stage_route("picture_description", table, settings)
+        return resolve_stage_route("vlm", table, settings)
 
     return resolve_stage_route("vlm", table, settings)
 
