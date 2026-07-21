@@ -100,7 +100,7 @@ def test_kserve_infer_endpoint_binary_layout(gateway_settings, full_routing_yaml
                 "choices": [
                     {
                         "message": {
-                            "content": '{"boxes":[{"label":"Title","bbox":[1,2,3,4]}]}',
+                            "content": '{"boxes":[{"label":"Title","bbox":[0,0,6,6]}]}',
                         }
                     }
                 ]

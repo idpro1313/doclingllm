@@ -54,16 +54,16 @@ def test_encode_object_detection_per_batch_item():
     result = encode_object_detection_response(
         "layout",
         [
-            [{"label": "title", "bbox": [1, 2, 3, 4], "score": 0.9}],
-            [{"label": "text", "bbox": [5, 6, 7, 8], "score": 0.7}],
+            [{"label": "title", "bbox": [10, 20, 80, 60], "score": 0.9}],
+            [{"label": "text", "bbox": [15, 25, 90, 70], "score": 0.7}],
         ],
     )
     labels = next(item for item in result["outputs"] if item["name"] == "labels")
     boxes = next(item for item in result["outputs"] if item["name"] == "boxes")
     assert labels["shape"] == [2, 1]
     assert boxes["shape"] == [2, 1, 4]
-    assert boxes["data"][0:4] == [1.0, 2.0, 3.0, 4.0]
-    assert boxes["data"][4:8] == [5.0, 6.0, 7.0, 8.0]
+    assert boxes["data"][0:4] == [10.0, 20.0, 80.0, 60.0]
+    assert boxes["data"][4:8] == [15.0, 25.0, 90.0, 70.0]
 
 
 def test_encode_object_detection_nested_bbox_and_scale():
@@ -80,6 +80,26 @@ def test_encode_object_detection_nested_bbox_and_scale():
     boxes = next(item for item in result["outputs"] if item["name"] == "boxes")
     assert boxes["shape"] == [1, 1, 4]
     assert boxes["data"] == [10.0, 40.0, 50.0, 160.0]
+
+
+def test_encode_object_detection_clamps_and_drops_tiny_table():
+    result = encode_object_detection_response(
+        "layout",
+        [
+            [
+                {"label": "table", "bbox": [-10, -5, 5, 10], "score": 0.9},
+                {"label": "table", "bbox": [10, 10, 200, 180], "score": 0.8},
+                {"label": "text", "bbox": [0, 0, 50, 40], "score": 0.7},
+            ]
+        ],
+        image_sizes=[(100, 200)],
+    )
+    labels = next(item for item in result["outputs"] if item["name"] == "labels")
+    boxes = next(item for item in result["outputs"] if item["name"] == "boxes")
+    assert labels["shape"] == [1, 2]
+    assert boxes["shape"] == [1, 2, 4]
+    assert boxes["data"][0:4] == [10.0, 10.0, 100.0, 180.0]
+    assert boxes["data"][4:8] == [0.0, 0.0, 50.0, 40.0]
 
 
 def test_build_kserve_model_metadata_layout():
@@ -163,7 +183,7 @@ def test_handle_kserve_infer_layout(gateway_settings, kserve_layout_request, cap
                 "choices": [
                     {
                         "message": {
-                            "content": '{"boxes":[{"label":"Title","bbox":[1,2,3,4]}]}',
+                            "content": '{"boxes":[{"label":"Title","bbox":[0,0,6,6]}]}',
                         }
                     }
                 ]

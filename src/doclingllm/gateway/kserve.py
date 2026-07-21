@@ -5,7 +5,7 @@
 ## @links [USES_API(9): doclingllm.gateway.client.ExternalApiClient]
 ## @links [USES_API(8): doclingllm.gateway.parsers.get_parser]
 ## @changes
-## LAST_CHANGE: [v0.2.14 – coerce nested/inverted layout bboxes; skip invalid to avoid rtree min>max.]
+## LAST_CHANGE: [v0.2.16 – clamp layout boxes to page; drop tiny/empty table crops that crash TableFormer OpenCV resize.]
 ## @modulemap
 ## FUNC 10[Handle KServe infer request] => handle_kserve_infer
 ## FUNC 8[Build model metadata by name] => build_kserve_model_metadata
@@ -14,7 +14,7 @@
 def _module_contract():
     pass
 # endregion MODULE_CONTRACT
-# GREP_SUMMARY: KServe v2, infer, tensor, object detection, layout, OCR, picture_classifier, metadata, OCR shape, bbox coerce
+# GREP_SUMMARY: KServe v2, infer, tensor, object detection, layout, OCR, picture_classifier, metadata, OCR shape, bbox coerce, table crop
 # STRUCTURE: ▶ model_name → ◇ metadata|infer branch → ⚡ vision_inference → ◇ parser → ⊕ tensor encode → ⎋ KServe JSON
 
 import base64
@@ -104,6 +104,9 @@ PICTURE_CLASSIFIER_LABEL2ID: dict[str, int] = {
 
 PICTURE_CLASSIFIER_NUM_CLASSES = 26
 DEFAULT_DETECTION_SCORE = 0.9
+MIN_LAYOUT_BOX_SIDE_PX = 4.0
+MIN_TABLE_BOX_SIDE_PX = 32.0
+LAYOUT_TABLE_LABEL_ID = LAYOUT_HERON_LABEL2ID["table"]
 
 
 # region FUNC_build_kserve_model_metadata [DOMAIN(8): KServe; CONCEPT(8): Metadata; TECH(8): json]
@@ -493,6 +496,39 @@ def _maybe_scale_normalized_xyxy(
 # endregion FUNC__maybe_scale_normalized_xyxy
 
 
+# region FUNC__finalize_layout_xyxy [DOMAIN(8): Layout; CONCEPT(9): BBoxClamp; TECH(8): float]
+## @purpose Clamp layout boxes to page pixels and reject crops too small for downstream TableFormer.
+## @complexity 4
+def _finalize_layout_xyxy(
+    xyxy: list[float],
+    image_size: Optional[tuple[int, int]],
+    label_id: int,
+) -> Optional[list[float]]:
+    # BUG_FIX_CONTEXT: VLM table boxes can be OOB/degenerate → empty crop →
+    # docling_ibm_models TableFormer cv2.resize asserts !ssize.empty().
+    xmin, ymin, xmax, ymax = xyxy
+    if image_size is not None:
+        width, height = image_size
+        if width > 0 and height > 0:
+            xmin = max(0.0, min(float(width), xmin))
+            xmax = max(0.0, min(float(width), xmax))
+            ymin = max(0.0, min(float(height), ymin))
+            ymax = max(0.0, min(float(height), ymax))
+    if xmax <= xmin or ymax <= ymin:
+        return None
+    min_side = (
+        MIN_TABLE_BOX_SIDE_PX
+        if label_id == LAYOUT_TABLE_LABEL_ID
+        else MIN_LAYOUT_BOX_SIDE_PX
+    )
+    if (xmax - xmin) < min_side or (ymax - ymin) < min_side:
+        return None
+    return [xmin, ymin, xmax, ymax]
+
+
+# endregion FUNC__finalize_layout_xyxy
+
+
 # region FUNC__normalize_detection_items [DOMAIN(7): Layout; CONCEPT(7): DetectionNormalize; TECH(7): list]
 ## @purpose Convert free-form parser box dicts into typed label/box/score triples for OD encoding.
 ## @complexity 5
@@ -514,10 +550,12 @@ def _normalize_detection_items(
             skipped += 1
             continue
         xyxy = _maybe_scale_normalized_xyxy(xyxy, image_size)
-        if xyxy[2] <= xyxy[0] or xyxy[3] <= xyxy[1]:
+        label_id = _layout_label_to_id(item.get("label", "text"))
+        xyxy = _finalize_layout_xyxy(xyxy, image_size, label_id)
+        if xyxy is None:
             skipped += 1
             continue
-        labels_list.append(_layout_label_to_id(item.get("label", "text")))
+        labels_list.append(label_id)
         boxes_list.append(xyxy)
         try:
             scores_list.append(float(item.get("score", DEFAULT_DETECTION_SCORE)))
