@@ -78,8 +78,9 @@ custom_picture_classification_presets:
       repo_id: docling-project/DocumentFigureClassifier-v2.5
 
 # VLM pipeline → OpenAI-compatible proxy on gateway.
-# Gradio UI does not send vlm_pipeline_preset; jobkit falls back to granite_docling /
-# "default" — overwrite those IDs so UI "Vlm" never loads local HF weights.
+# Gradio UI omits vlm_pipeline_preset → jobkit legacy local granite (YAML alone cannot fix).
+# Overlay Dockerfile patches Gradio to send vlm_pipeline_preset=default; aliases below
+# make "default"/"granite_docling" resolve to remote API.
 default_vlm_preset: remote_vlm
 allowed_vlm_engines:
   - api
