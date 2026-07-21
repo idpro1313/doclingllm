@@ -379,4 +379,28 @@ pyyaml>=6.0           # gateway-models.yaml loading
 3. **O2:** LAN из Docker — default bridge, fallback host network (Architecture §5).
 4. **Действие:** делегировать **Slice S1** Code-агенту или последовательно S1→S8.
 
+---
+
+### 10. Compliance audit vs docling-serve / docling (2026-07-22, v0.2.10)
+
+**Полный отчёт:** `work/architect_docling_serve_compliance_audit.md` (не в git).
+
+| Статус | Область |
+|--------|---------|
+| OK | KServe HTTP presets OCR/layout; binary infer request; layout OD I/O; OCR inputs; remote_services; table local fallback |
+| CRITICAL | VLM/pic_desc/code_formula: `url` в `api_overrides` вместо `engine_options` → default Ollama localhost |
+| CRITICAL | `docs/gateway_api_contract.md` устарел (legacy BYTES) |
+| HIGH | OCR boxes shape `(1,N,4,2)` vs engine `(N,4,2)` |
+| HIGH | picture_classifier `repo_id` не совпадает с upstream v2.5 |
+
+**Критерии следующего slice:** C1 immutability; C2 YAML schema; C3 tensor shapes; C5 docs sync.
+
+**Superposition (ожидает collapse оператора):**
+
+| ID | Scope |
+|----|-------|
+| A | Только CRITICAL: YAML VLM* + gateway_api_contract |
+| B | CRITICAL + HIGH: A + OCR shapes + repo_id + tests |
+| C | Full hardening: B + layout batch + binary response |
+
 $END_DEV_PLAN
