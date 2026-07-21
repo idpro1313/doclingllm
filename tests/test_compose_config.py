@@ -29,6 +29,33 @@ def test_docling_serve_yaml_points_to_gateway():
     assert "http://model-gateway:8080" in yaml.dump(data)
 
 
+def test_env_defaults_has_required_keys():
+    repo_root = Path(__file__).resolve().parents[1]
+    defaults_path = repo_root / "deploy" / ".env.defaults"
+    text = defaults_path.read_text(encoding="utf-8")
+    for key in (
+        "VISION_API_BASE_URL",
+        "VISION_API_KEY=",
+        "DOCLING_SERVE_ENABLE_UI=true",
+        "TEXT_API_BASE_URL",
+    ):
+        assert key in text
+    for line in text.splitlines():
+        if line.startswith("VISION_API_KEY="):
+            assert line == "VISION_API_KEY="
+            break
+    else:
+        raise AssertionError("VISION_API_KEY line missing in .env.defaults")
+
+
+def test_start_sh_creates_env_from_defaults():
+    repo_root = Path(__file__).resolve().parents[1]
+    start_sh = repo_root / "scripts" / "start.sh"
+    text = start_sh.read_text(encoding="utf-8")
+    assert ".env.defaults" in text
+    assert "prompt_for_vision_api_key" in text
+
+
 def test_gateway_models_yaml_has_all_stages():
     repo_root = Path(__file__).resolve().parents[1]
     config_path = repo_root / "deploy" / "config" / "gateway-models.yaml"

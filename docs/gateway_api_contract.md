@@ -92,12 +92,12 @@ Authorization добавляется только для vision backend.
 ## Deployment
 
 ```bash
-cp deploy/.env.example deploy/.env
-# заполнить VISION_API_KEY
-chmod +x scripts/*.sh
-./scripts/start.sh
+chmod +x scripts/*.sh   # не нужно, если clone с git (mode 100755)
+./scripts/start.sh      # создаст deploy/.env из .env.defaults и запросит VISION_API_KEY
 ./scripts/healthcheck.sh
 ```
+
+При первом запуске скрипт копирует `deploy/.env.defaults` → `deploy/.env` и **интерактивно запрашивает** Cloud.ru `VISION_API_KEY` (ввод скрыт). Токен сохраняется только в `deploy/.env` (gitignored).
 
 **UI (Gradio demo):** http://localhost:5001/ui — включено через `DOCLING_SERVE_ENABLE_UI=true`.
 
