@@ -99,4 +99,6 @@ chmod +x scripts/*.sh
 ./scripts/healthcheck.sh
 ```
 
+**UI (Gradio demo):** http://localhost:5001/ui — включено через `DOCLING_SERVE_ENABLE_UI=true`.
+
 Секреты только в `deploy/.env` (gitignored).

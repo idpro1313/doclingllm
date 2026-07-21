@@ -24,6 +24,9 @@ Thumbs.db
 
 # Cursor / Kilo Code / Doxygen — только локально (копия из шаблона; см. agent-rules.mdc)
 .cursor/
+!.cursor/rules/
+.cursor/rules/*
+!.cursor/rules/doclingllm.mdc
 .kilocode/
 .kilo/
 Prompts.xml

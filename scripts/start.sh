@@ -31,5 +31,6 @@ sleep 5
 "${SCRIPT_DIR}/healthcheck.sh"
 
 echo "[doclingllm] Stack is up."
-echo "  docling-serve: http://localhost:5001"
+echo "  docling-serve API: http://localhost:5001"
+echo "  docling UI:        http://localhost:5001/ui"
 echo "  gateway (internal): http://model-gateway:8080"

@@ -15,6 +15,7 @@ def test_docker_compose_declares_remote_services():
     assert "DOCLING_SERVE_ENABLE_REMOTE_SERVICES" in text
     assert "DOCLING_SERVE_LOAD_MODELS_AT_BOOT" in text
     assert 'DOCLING_SERVE_LOAD_MODELS_AT_BOOT: "false"' in text
+    assert 'DOCLING_SERVE_ENABLE_UI: "true"' in text
     assert "model-gateway" in text
     assert "docling-serve" in text
 
