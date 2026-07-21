@@ -20,7 +20,11 @@ from fastapi.responses import JSONResponse
 
 from doclingllm.gateway.client import ExternalApiClient
 from doclingllm.gateway.config import GatewaySettings, load_gateway_settings
-from doclingllm.gateway.kserve import KSERVE_MODEL_TO_STAGE, handle_kserve_infer
+from doclingllm.gateway.kserve import (
+    KSERVE_MODEL_TO_STAGE,
+    build_kserve_model_metadata,
+    handle_kserve_infer,
+)
 from doclingllm.gateway.openai_proxy import handle_openai_proxy
 from doclingllm.gateway.routing import RoutingTable, load_routing_table
 
@@ -78,6 +82,24 @@ def create_app(
     @app.get("/health")
     async def health() -> dict[str, str]:
         return {"status": "ok", "service": "doclingllm-gateway"}
+
+    @app.get("/v2/health/ready")
+    async def kserve_server_ready() -> dict[str, bool]:
+        return {"ready": True}
+
+    @app.get("/v2/models/{model_name}")
+    async def kserve_model_metadata(model_name: str) -> JSONResponse:
+        try:
+            metadata = build_kserve_model_metadata(model_name)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return JSONResponse(content=metadata)
+
+    @app.get("/v2/models/{model_name}/ready")
+    async def kserve_model_ready(model_name: str) -> JSONResponse:
+        if model_name not in KSERVE_MODEL_TO_STAGE:
+            raise HTTPException(status_code=404, detail=f"Unknown model: {model_name}")
+        return JSONResponse(content={"ready": True})
 
     @app.post("/v2/models/{model_name}/infer")
     async def kserve_infer(model_name: str, request: Request) -> JSONResponse:

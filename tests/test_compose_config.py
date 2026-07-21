@@ -70,6 +70,15 @@ def test_start_sh_creates_env_from_defaults():
     assert "prompt_for_vision_api_key" in text
 
 
+def test_redeploy_sh_pull_stop_start():
+    repo_root = Path(__file__).resolve().parents[1]
+    redeploy_sh = repo_root / "scripts" / "redeploy.sh"
+    text = redeploy_sh.read_text(encoding="utf-8")
+    assert "git pull" in text
+    assert "stop.sh" in text
+    assert "start.sh" in text
+
+
 def test_gateway_models_yaml_has_all_stages():
     repo_root = Path(__file__).resolve().parents[1]
     config_path = repo_root / "deploy" / "config" / "gateway-models.yaml"

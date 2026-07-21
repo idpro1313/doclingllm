@@ -37,6 +37,39 @@ KSERVE_MODEL_TO_STAGE: dict[str, str] = {
     "picture_classifier": "picture_classification",
 }
 
+KSERVE_MODEL_VERSION = "1"
+KSERVE_MODEL_PLATFORM = "doclingllm"
+
+
+# region FUNC_build_kserve_model_metadata [DOMAIN(7): KServe; CONCEPT(7): Metadata; TECH(7): json]
+## @purpose Return KServe v2 model metadata for GET /v2/models/{name} used by docling api_kserve_v2 engines.
+## @complexity 2
+def build_kserve_model_metadata(model_name: str) -> dict[str, Any]:
+    if model_name not in KSERVE_MODEL_TO_STAGE:
+        raise KeyError(f"Unsupported KServe model name: {model_name}")
+    return {
+        "name": model_name,
+        "versions": [KSERVE_MODEL_VERSION],
+        "platform": KSERVE_MODEL_PLATFORM,
+        "inputs": [
+            {
+                "name": "image",
+                "datatype": "BYTES",
+                "shape": [1],
+            }
+        ],
+        "outputs": [
+            {
+                "name": "output",
+                "datatype": "BYTES",
+                "shape": [1],
+            }
+        ],
+    }
+
+
+# endregion FUNC_build_kserve_model_metadata
+
 
 # region FUNC_decode_image_from_kserve_request [DOMAIN(8): KServe; CONCEPT(8): TensorDecode; TECH(8): numpy]
 ## @purpose Extract raw image bytes from KServe v2 infer request inputs array.
@@ -120,7 +153,7 @@ def encode_kserve_response(model_name: str, parsed: dict[str, Any]) -> dict[str,
 # region FUNC_request_model_version [DOMAIN(5): KServe; CONCEPT(5): Metadata; TECH(5): str]
 ## @purpose Return static model version label for KServe response metadata.
 def request_model_version(model_name: str) -> str:
-    return "1"
+    return KSERVE_MODEL_VERSION
 
 
 # endregion FUNC_request_model_version

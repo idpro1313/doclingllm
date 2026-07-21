@@ -14,6 +14,8 @@
 | Method | Path | Consumer |
 |--------|------|----------|
 | GET | `/health` | docker healthcheck |
+| GET | `/v2/models/{name}` | docling api_kserve_v2 metadata probe |
+| GET | `/v2/models/{name}/ready` | docling api_kserve_v2 readiness probe |
 | POST | `/v2/models/ocr/infer` | docling OCR (kserve_v2) |
 | POST | `/v2/models/layout/infer` | docling layout |
 | POST | `/v2/models/table/infer` | docling table |
@@ -94,6 +96,7 @@ Authorization добавляется только для vision backend.
 ```bash
 chmod +x scripts/*.sh   # не нужно, если clone с git (mode 100755)
 ./scripts/start.sh      # создаст deploy/.env из .env.defaults и запросит VISION_API_KEY
+./scripts/redeploy.sh   # git pull → stop → start (обновление на сервере)
 ./scripts/healthcheck.sh
 ```
 

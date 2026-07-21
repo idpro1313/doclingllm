@@ -11,6 +11,7 @@ import httpx
 
 from doclingllm.gateway.client import ExternalApiClient
 from doclingllm.gateway.kserve import (
+    build_kserve_model_metadata,
     decode_image_from_kserve_request,
     encode_kserve_response,
     handle_kserve_infer,
@@ -18,6 +19,12 @@ from doclingllm.gateway.kserve import (
 from doclingllm.gateway.routing import load_routing_table
 
 pytest_plugins = ["tests.conftest_gateway"]
+
+
+def test_build_kserve_model_metadata_layout():
+    metadata = build_kserve_model_metadata("layout")
+    assert metadata["name"] == "layout"
+    assert metadata["outputs"][0]["name"] == "output"
 
 
 def test_decode_image_bytes_tensor(kserve_image_request):
