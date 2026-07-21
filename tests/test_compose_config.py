@@ -27,6 +27,8 @@ def test_docling_serve_yaml_points_to_gateway():
     assert data["enable_remote_services"] is True
     assert data["load_models_at_boot"] is False
     assert "http://model-gateway:8080" in yaml.dump(data)
+    assert data.get("allowed_ocr_presets") is None
+    assert data["default_ocr_preset"] == "remote_ocr"
 
 
 def test_env_defaults_has_required_keys():

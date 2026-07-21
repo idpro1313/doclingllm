@@ -87,5 +87,6 @@ allowed_picture_description_presets:
   - remote_pic_desc
 allowed_code_formula_presets:
   - remote_code_formula
-allowed_ocr_presets:
-  - remote_ocr
+# allowed_ocr_presets: не задаём — policy docling-serve пересекает список с kind OCR-фабрики
+# (auto, easyocr, kserve_v2_ocr, …), а не с ID custom_ocr_presets. Значение remote_ocr
+# давало Allowed values: [] и блокировало ocr_preset auto из UI/API.
