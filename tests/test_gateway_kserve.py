@@ -58,8 +58,9 @@ def test_encode_ocr_keeps_plain_text_without_bbox():
     txts = next(item for item in result["outputs"] if item["name"] == "txts")
     assert boxes["shape"] == [2, 4, 2]
     assert txts["data"] == ["line one", "line two"]
-    assert boxes["data"][0:2] == [0.0, 0.0]
-    assert boxes["data"][4:6] == [0.0, 200.0]
+    # quads flattened: [x1,y1, x2,y1, x2,y2, x1,y2] per region
+    assert boxes["data"][0:8] == [0.0, 0.0, 200.0, 0.0, 200.0, 200.0, 0.0, 200.0]
+    assert boxes["data"][8:16] == [0.0, 200.0, 200.0, 200.0, 200.0, 400.0, 0.0, 400.0]
 
 
 def test_coerce_xyxy_bbox_nested_and_inverted():
