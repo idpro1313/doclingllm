@@ -26,7 +26,7 @@ stages:
     model: "${VISION_MODEL}"
     path: /chat/completions
     response_parser: layout_boxes_json
-    system_prompt: "Detect document layout regions. Return JSON array of {label, bbox:[x1,y1,x2,y2]}."
+    system_prompt: "Detect document layout regions. Return JSON {\"boxes\":[{\"label\":\"title|text|section_header|list_item|table|picture|caption\",\"bbox\":[x1,y1,x2,y2],\"score\":0.0-1.0}]}. bbox MUST be flat pixel xyxy with x1<x2 and y1<y2 (not nested points)."
 
   table:
     endpoint: vision

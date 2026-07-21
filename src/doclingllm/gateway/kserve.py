@@ -5,15 +5,16 @@
 ## @links [USES_API(9): doclingllm.gateway.client.ExternalApiClient]
 ## @links [USES_API(8): doclingllm.gateway.parsers.get_parser]
 ## @changes
-## LAST_CHANGE: [v0.2.12 – OCR boxes shape (N,4,2); layout per-batch OD encode without cross-image merge.]
+## LAST_CHANGE: [v0.2.14 – coerce nested/inverted layout bboxes; skip invalid to avoid rtree min>max.]
 ## @modulemap
 ## FUNC 10[Handle KServe infer request] => handle_kserve_infer
 ## FUNC 8[Build model metadata by name] => build_kserve_model_metadata
 ## FUNC 8[Decode image tensor from KServe body] => decode_image_from_kserve_request
+## FUNC 8[Coerce free-form bbox to xyxy] => coerce_xyxy_bbox
 def _module_contract():
     pass
 # endregion MODULE_CONTRACT
-# GREP_SUMMARY: KServe v2, infer, tensor, object detection, layout, OCR, picture_classifier, metadata, OCR shape
+# GREP_SUMMARY: KServe v2, infer, tensor, object detection, layout, OCR, picture_classifier, metadata, OCR shape, bbox coerce
 # STRUCTURE: ▶ model_name → ◇ metadata|infer branch → ⚡ vision_inference → ◇ parser → ⊕ tensor encode → ⎋ KServe JSON
 
 import base64
@@ -412,24 +413,121 @@ def encode_kserve_response(model_name: str, parsed: dict[str, Any]) -> dict[str,
 # endregion FUNC_encode_kserve_response
 
 
+# region FUNC_coerce_xyxy_bbox [DOMAIN(8): Layout; CONCEPT(9): BBoxNormalize; TECH(8): list]
+## @purpose Accept nested/dict/inverted LLM bbox formats and return ordered xyxy or None if invalid.
+## @complexity 6
+def coerce_xyxy_bbox(raw: Any) -> Optional[list[float]]:
+    # BUG_FIX_CONTEXT: Qwen/VLM often returns bbox as [[x1,y1],[x2,y2]] or inverted xyxy;
+    # float(list) crashed gateway; inverted coords caused docling rtree "min > max".
+    if raw is None:
+        return None
+
+    if isinstance(raw, dict):
+        keys_xyxy = ("x1", "y1", "x2", "y2")
+        keys_ltrb = ("l", "t", "r", "b")
+        keys_left = ("left", "top", "right", "bottom")
+        if all(key in raw for key in keys_xyxy):
+            raw = [raw["x1"], raw["y1"], raw["x2"], raw["y2"]]
+        elif all(key in raw for key in keys_ltrb):
+            raw = [raw["l"], raw["t"], raw["r"], raw["b"]]
+        elif all(key in raw for key in keys_left):
+            raw = [raw["left"], raw["top"], raw["right"], raw["bottom"]]
+        else:
+            return None
+
+    flat: list[float] = []
+
+    def _walk(node: Any) -> None:
+        if isinstance(node, (list, tuple)):
+            for child in node:
+                _walk(child)
+            return
+        if isinstance(node, (int, float)):
+            flat.append(float(node))
+            return
+        if isinstance(node, str):
+            try:
+                flat.append(float(node.strip()))
+            except ValueError:
+                return
+
+    _walk(raw)
+    if len(flat) < 4:
+        return None
+
+    x1, y1, x2, y2 = flat[0], flat[1], flat[2], flat[3]
+    xmin = min(x1, x2)
+    xmax = max(x1, x2)
+    ymin = min(y1, y2)
+    ymax = max(y1, y2)
+    if xmax <= xmin or ymax <= ymin:
+        return None
+    return [xmin, ymin, xmax, ymax]
+
+
+# endregion FUNC_coerce_xyxy_bbox
+
+
+# region FUNC__maybe_scale_normalized_xyxy [DOMAIN(7): Layout; CONCEPT(7): CoordScale; TECH(7): float]
+## @purpose Scale unit-interval xyxy to pixel space when image size is known.
+## @complexity 3
+def _maybe_scale_normalized_xyxy(
+    xyxy: list[float],
+    image_size: Optional[tuple[int, int]],
+) -> list[float]:
+    if image_size is None:
+        return xyxy
+    width, height = image_size
+    if width <= 0 or height <= 0:
+        return xyxy
+    if max(xyxy) <= 1.5:
+        return [
+            xyxy[0] * width,
+            xyxy[1] * height,
+            xyxy[2] * width,
+            xyxy[3] * height,
+        ]
+    return xyxy
+
+
+# endregion FUNC__maybe_scale_normalized_xyxy
+
+
 # region FUNC__normalize_detection_items [DOMAIN(7): Layout; CONCEPT(7): DetectionNormalize; TECH(7): list]
 ## @purpose Convert free-form parser box dicts into typed label/box/score triples for OD encoding.
-## @complexity 3
+## @complexity 5
 def _normalize_detection_items(
     boxes_raw: list[Any],
+    image_size: Optional[tuple[int, int]] = None,
 ) -> tuple[list[int], list[list[float]], list[float]]:
     labels_list: list[int] = []
     boxes_list: list[list[float]] = []
     scores_list: list[float] = []
+    skipped = 0
     for item in boxes_raw:
         if not isinstance(item, dict):
+            skipped += 1
             continue
-        bbox = item.get("bbox", item.get("box", [0, 0, 0, 0]))
-        if len(bbox) < 4:
+        bbox = item.get("bbox", item.get("box", item.get("coordinates")))
+        xyxy = coerce_xyxy_bbox(bbox)
+        if xyxy is None:
+            skipped += 1
+            continue
+        xyxy = _maybe_scale_normalized_xyxy(xyxy, image_size)
+        if xyxy[2] <= xyxy[0] or xyxy[3] <= xyxy[1]:
+            skipped += 1
             continue
         labels_list.append(_layout_label_to_id(item.get("label", "text")))
-        boxes_list.append([float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3])])
-        scores_list.append(float(item.get("score", DEFAULT_DETECTION_SCORE)))
+        boxes_list.append(xyxy)
+        try:
+            scores_list.append(float(item.get("score", DEFAULT_DETECTION_SCORE)))
+        except (TypeError, ValueError):
+            scores_list.append(DEFAULT_DETECTION_SCORE)
+    if skipped:
+        logger.info(
+            f"[IMP:6][_normalize_detection_items][SKIP] skipped_invalid={skipped} "
+            f"kept={len(boxes_list)} [FILTER]"
+        )
     return labels_list, boxes_list, scores_list
 
 
@@ -442,6 +540,7 @@ def _normalize_detection_items(
 def encode_object_detection_response(
     model_name: str,
     batch_detections: list[list[dict[str, Any]]],
+    image_sizes: Optional[list[tuple[int, int]]] = None,
 ) -> dict[str, Any]:
     # BUG_FIX_CONTEXT: previously merged all batch images into one detection list then np.repeat —
     # that duplicated wrong boxes across batch items. Encode each image separately and pad to max N.
@@ -450,9 +549,12 @@ def encode_object_detection_response(
         batch_size = 1
         batch_detections = [[]]
 
-    normalized: list[tuple[list[int], list[list[float]], list[float]]] = [
-        _normalize_detection_items(items) for items in batch_detections
-    ]
+    normalized: list[tuple[list[int], list[list[float]], list[float]]] = []
+    for batch_index, items in enumerate(batch_detections):
+        size = None
+        if image_sizes is not None and batch_index < len(image_sizes):
+            size = image_sizes[batch_index]
+        normalized.append(_normalize_detection_items(items, image_size=size))
     max_count = max((len(item[0]) for item in normalized), default=0)
 
     labels = np.zeros((batch_size, max_count), dtype=np.int64)
@@ -511,11 +613,17 @@ def encode_ocr_kserve_response(model_name: str, parsed: dict[str, Any]) -> dict[
         bbox = region.get("bbox", [0, 0, 0, 0])
         if len(bbox) < 4:
             continue
-        x1, y1, x2, y2 = float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3])
+        xyxy = coerce_xyxy_bbox(bbox)
+        if xyxy is None:
+            continue
+        x1, y1, x2, y2 = xyxy
         quad = [[x1, y1], [x2, y1], [x2, y2], [x1, y2]]
         box_tensors.append(quad)
         texts.append(str(region.get("text", "")))
-        scores.append(float(region.get("score", DEFAULT_DETECTION_SCORE)))
+        try:
+            scores.append(float(region.get("score", DEFAULT_DETECTION_SCORE)))
+        except (TypeError, ValueError):
+            scores.append(DEFAULT_DETECTION_SCORE)
 
     # BUG_FIX_CONTEXT: docling KserveV2OcrModel._create_text_cells expects boxes (N,4,2) and
     # zip(boxes, txts, scores) without a leading batch axis; (1,N,4,2) broke coordinate extraction.
@@ -617,6 +725,13 @@ def handle_kserve_infer(
         if pixel_values is None or orig_target_sizes is None:
             raise ValueError("Layout infer requires images and orig_target_sizes tensors")
         png_list = _pixel_values_batch_to_png_list(pixel_values, orig_target_sizes)
+        sizes_arr = np.asarray(orig_target_sizes)
+        image_sizes: list[tuple[int, int]] = []
+        for index in range(len(png_list)):
+            if sizes_arr.ndim >= 2 and sizes_arr.shape[0] > index:
+                image_sizes.append((int(sizes_arr[index, 0]), int(sizes_arr[index, 1])))
+            else:
+                image_sizes.append((0, 0))
         batch_detections: list[list[dict[str, Any]]] = []
         for index, image_bytes in enumerate(png_list):
             logger.info(
@@ -633,7 +748,11 @@ def handle_kserve_infer(
             batch_detections.append(
                 [item for item in boxes_raw if isinstance(item, dict)]
             )
-        response = encode_object_detection_response(model_name, batch_detections)
+        response = encode_object_detection_response(
+            model_name,
+            batch_detections,
+            image_sizes=image_sizes,
+        )
     elif model_name == "ocr":
         image_bytes = decode_image_from_kserve_request(request_body)
         logger.info(

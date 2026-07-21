@@ -125,7 +125,8 @@ def create_app(
             )
             log_gateway_kserve_response(logger, model_name, result)
             return JSONResponse(content=result)
-        except ValueError as exc:
+        except (ValueError, TypeError) as exc:
+            # BUG_FIX_CONTEXT: bad request tensors and malformed VLM bbox must map to 400, not ASGI 500.
             logger.error(
                 f"[IMP:10][kserve_infer][BAD_REQUEST] model={model_name} error={exc} [FATAL]"
             )

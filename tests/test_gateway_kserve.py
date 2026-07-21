@@ -11,6 +11,7 @@ import httpx
 from doclingllm.gateway.client import ExternalApiClient
 from doclingllm.gateway.kserve import (
     build_kserve_model_metadata,
+    coerce_xyxy_bbox,
     decode_image_from_kserve_request,
     encode_kserve_response,
     encode_object_detection_response,
@@ -41,6 +42,14 @@ def test_encode_ocr_kserve_response_shape_without_batch_axis():
     assert txts["data"] == ["A", "B"]
 
 
+def test_coerce_xyxy_bbox_nested_and_inverted():
+    assert coerce_xyxy_bbox([[10, 20], [30, 40]]) == [10.0, 20.0, 30.0, 40.0]
+    assert coerce_xyxy_bbox([30, 40, 10, 20]) == [10.0, 20.0, 30.0, 40.0]
+    assert coerce_xyxy_bbox({"x1": 5, "y1": 6, "x2": 1, "y2": 2}) == [1.0, 2.0, 5.0, 6.0]
+    assert coerce_xyxy_bbox([1, 1, 1, 1]) is None
+    assert coerce_xyxy_bbox([[1, 2]]) is None
+
+
 def test_encode_object_detection_per_batch_item():
     result = encode_object_detection_response(
         "layout",
@@ -55,6 +64,22 @@ def test_encode_object_detection_per_batch_item():
     assert boxes["shape"] == [2, 1, 4]
     assert boxes["data"][0:4] == [1.0, 2.0, 3.0, 4.0]
     assert boxes["data"][4:8] == [5.0, 6.0, 7.0, 8.0]
+
+
+def test_encode_object_detection_nested_bbox_and_scale():
+    result = encode_object_detection_response(
+        "layout",
+        [
+            [
+                {"label": "text", "bbox": [[0.1, 0.2], [0.5, 0.8]], "score": 0.9},
+                {"label": "bad", "bbox": [[1, 2]], "score": 0.1},
+            ]
+        ],
+        image_sizes=[(100, 200)],
+    )
+    boxes = next(item for item in result["outputs"] if item["name"] == "boxes")
+    assert boxes["shape"] == [1, 1, 4]
+    assert boxes["data"] == [10.0, 40.0, 50.0, 160.0]
 
 
 def test_build_kserve_model_metadata_layout():
