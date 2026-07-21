@@ -42,6 +42,26 @@ def test_encode_ocr_kserve_response_shape_without_batch_axis():
     assert txts["data"] == ["A", "B"]
 
 
+def test_encode_ocr_keeps_plain_text_without_bbox():
+    result = encode_ocr_kserve_response(
+        "ocr",
+        {
+            "text_regions": [
+                {"text": "line one", "score": 0.5},
+                {"text": "line two", "score": 0.5},
+                {"text": "", "score": 0.5},
+            ]
+        },
+        image_size=(200, 400),
+    )
+    boxes = next(item for item in result["outputs"] if item["name"] == "boxes")
+    txts = next(item for item in result["outputs"] if item["name"] == "txts")
+    assert boxes["shape"] == [2, 4, 2]
+    assert txts["data"] == ["line one", "line two"]
+    assert boxes["data"][0:2] == [0.0, 0.0]
+    assert boxes["data"][4:6] == [0.0, 200.0]
+
+
 def test_coerce_xyxy_bbox_nested_and_inverted():
     assert coerce_xyxy_bbox([[10, 20], [30, 40]]) == [10.0, 20.0, 30.0, 40.0]
     assert coerce_xyxy_bbox([30, 40, 10, 20]) == [10.0, 20.0, 30.0, 40.0]

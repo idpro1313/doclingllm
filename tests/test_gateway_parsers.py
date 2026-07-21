@@ -19,8 +19,10 @@ def test_extract_json_from_fenced_block():
 
 
 def test_parse_deepseek_ocr_json_plain_fallback():
-    result = parse_deepseek_ocr_json("Plain OCR line")
+    result = parse_deepseek_ocr_json("Plain OCR line\nSecond line")
+    assert len(result["text_regions"]) == 2
     assert result["text_regions"][0]["text"] == "Plain OCR line"
+    assert "bbox" not in result["text_regions"][0]
 
 
 def test_parse_layout_boxes_json_list():

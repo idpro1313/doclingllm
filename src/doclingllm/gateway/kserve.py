@@ -5,7 +5,7 @@
 ## @links [USES_API(9): doclingllm.gateway.client.ExternalApiClient]
 ## @links [USES_API(8): doclingllm.gateway.parsers.get_parser]
 ## @changes
-## LAST_CHANGE: [v0.2.16 – clamp layout boxes to page; drop tiny/empty table crops that crash TableFormer OpenCV resize.]
+## LAST_CHANGE: [v0.2.19 – OCR prompt + keep plain-text OCR via synthetic page bboxes (no empty tensors).]
 ## @modulemap
 ## FUNC 10[Handle KServe infer request] => handle_kserve_infer
 ## FUNC 8[Build model metadata by name] => build_kserve_model_metadata
@@ -14,7 +14,7 @@
 def _module_contract():
     pass
 # endregion MODULE_CONTRACT
-# GREP_SUMMARY: KServe v2, infer, tensor, object detection, layout, OCR, picture_classifier, metadata, OCR shape, bbox coerce, table crop
+# GREP_SUMMARY: KServe v2, infer, tensor, object detection, layout, OCR, picture_classifier, metadata, OCR shape, bbox coerce, table crop, OCR fallback
 # STRUCTURE: ▶ model_name → ◇ metadata|infer branch → ⚡ vision_inference → ◇ parser → ⊕ tensor encode → ⎋ KServe JSON
 
 import base64
@@ -636,28 +636,63 @@ def encode_object_detection_response(
 # endregion FUNC_encode_object_detection_response
 
 
+# region FUNC__png_size [DOMAIN(6): Image; CONCEPT(6): Size; TECH(6): PIL]
+## @purpose Read PNG/JPEG dimensions for OCR full-page fallback boxes.
+## @complexity 2
+def _png_size(image_bytes: bytes) -> tuple[int, int]:
+    from PIL import Image
+
+    with Image.open(BytesIO(image_bytes)) as image:
+        return int(image.size[0]), int(image.size[1])
+
+
+# endregion FUNC__png_size
+
+
 # region FUNC_encode_ocr_kserve_response [DOMAIN(9): OCR; CONCEPT(9): OCRTensor; TECH(9): numpy]
 ## @purpose Encode OCR parser output as KServe boxes/txts/scores tensors for kserve_v2_ocr model.
 ## @complexity 7
-def encode_ocr_kserve_response(model_name: str, parsed: dict[str, Any]) -> dict[str, Any]:
-    regions = parsed.get("text_regions", [])
+def encode_ocr_kserve_response(
+    model_name: str,
+    parsed: dict[str, Any],
+    image_size: Optional[tuple[int, int]] = None,
+) -> dict[str, Any]:
+    regions = [item for item in parsed.get("text_regions", []) if isinstance(item, dict)]
     box_tensors: list[list[list[float]]] = []
     texts: list[str] = []
     scores: list[float] = []
 
+    page_w = float(image_size[0]) if image_size and image_size[0] > 0 else 1000.0
+    page_h = float(image_size[1]) if image_size and image_size[1] > 0 else 1000.0
+    missing_bbox_count = sum(
+        1
+        for region in regions
+        if coerce_xyxy_bbox(region.get("bbox")) is None and str(region.get("text", "")).strip()
+    )
+    missing_index = 0
+
     for region in regions:
-        if not isinstance(region, dict):
+        text_value = str(region.get("text", "")).strip()
+        if not text_value:
             continue
-        bbox = region.get("bbox", [0, 0, 0, 0])
-        if len(bbox) < 4:
-            continue
-        xyxy = coerce_xyxy_bbox(bbox)
+        xyxy = coerce_xyxy_bbox(region.get("bbox"))
         if xyxy is None:
-            continue
+            # BUG_FIX_CONTEXT: Gemma/Qwen often return prose OCR without JSON boxes;
+            # synthesize stacked line boxes so txts are not dropped as empty tensors.
+            if missing_bbox_count <= 0:
+                continue
+            y1 = page_h * missing_index / missing_bbox_count
+            y2 = page_h * (missing_index + 1) / missing_bbox_count
+            missing_index += 1
+            xyxy = [0.0, y1, page_w, max(y2, y1 + 1.0)]
+            logger.info(
+                f"[IMP:6][encode_ocr_kserve_response][SYNTH_BBOX] "
+                f"text_len={len(text_value)} box={xyxy} [FALLBACK]"
+            )
         x1, y1, x2, y2 = xyxy
         quad = [[x1, y1], [x2, y1], [x2, y2], [x1, y2]]
         box_tensors.append(quad)
-        texts.append(str(region.get("text", "")))
+        texts.append(text_value)
         try:
             scores.append(float(region.get("score", DEFAULT_DETECTION_SCORE)))
         except (TypeError, ValueError):
@@ -793,18 +828,31 @@ def handle_kserve_infer(
         )
     elif model_name == "ocr":
         image_bytes = decode_image_from_kserve_request(request_body)
+        try:
+            ocr_image_size = _png_size(image_bytes)
+        except Exception as exc:
+            logger.warning(
+                f"[IMP:7][handle_kserve_infer][OCR_SIZE] failed to read image size: {exc} [WARN]"
+            )
+            ocr_image_size = (1000, 1000)
         logger.info(
             f"[IMP:7][handle_kserve_infer][DECODED] model={model_name} stage={stage} "
-            f"bytes={len(image_bytes)} [IO]"
+            f"bytes={len(image_bytes)} size={ocr_image_size} [IO]"
         )
         assistant_text = client.vision_inference(
             route,
             image_bytes,
-            user_prompt=user_prompt or f"Process document stage: {stage}",
+            user_prompt=user_prompt
+            or route.system_prompt
+            or f"Process document stage: {stage}",
         )
         parser = get_parser(route.response_parser)
         parsed = parser(assistant_text)
-        response = encode_ocr_kserve_response(model_name, parsed)
+        response = encode_ocr_kserve_response(
+            model_name,
+            parsed,
+            image_size=ocr_image_size,
+        )
     elif model_name == "picture_classifier":
         tensors = decode_kserve_input_tensors(request_body)
         pixel_values = tensors.get("pixel_values") or tensors.get("images")

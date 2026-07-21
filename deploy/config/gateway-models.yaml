@@ -19,6 +19,7 @@ stages:
     model: "${VISION_MODEL}"
     path: /chat/completions
     response_parser: deepseek_ocr_json
+    system_prompt: "OCR this document page. Return ONLY JSON {\"text_regions\":[{\"text\":\"...\",\"bbox\":[x1,y1,x2,y2],\"score\":0.0-1.0}]}. bbox MUST be flat pixel xyxy with x1<x2 and y1<y2. Do not return markdown prose."
 
   layout:
     endpoint: vision
