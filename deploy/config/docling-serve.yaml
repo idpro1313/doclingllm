@@ -1,24 +1,40 @@
 # docling-serve admin configuration — remote inference via model-gateway
 # Mount path in container: /config/docling-serve.yaml
+#
+# Важно (docling-jobkit): preset ID в default_*_preset при lookup "default" часто
+# трактуется как kind docling, не как custom preset. Custom presets с ключом
+# "default" (и для OCR — "auto") перезаписывают registry после init.
 
 enable_remote_services: true
 load_models_at_boot: false
 log_format: json
 
-# OCR → dedicated KServe v2 OCR kind (единственный stage с kind kserve_v2_ocr)
+# OCR → UI/API шлют ocr_preset=auto; перезаписываем registry["auto"]
 default_ocr_kind: kserve_v2_ocr
 default_ocr_preset: remote_ocr
 custom_ocr_presets:
+  auto:
+    kind: kserve_v2_ocr
+    url: "http://model-gateway:8080"
+    transport: http
+    model_name: ocr
   remote_ocr:
     kind: kserve_v2_ocr
     url: "http://model-gateway:8080"
     transport: http
     model_name: ocr
 
-# Layout → layout_object_detection + engine api_kserve_v2 (НЕ kserve_v2_ocr)
+# Layout → _parse_layout_options("default"); перезаписываем registry["default"]
 default_layout_kind: layout_object_detection
 default_layout_preset: remote_layout
 custom_layout_presets:
+  default:
+    kind: layout_object_detection
+    engine_options:
+      engine_type: api_kserve_v2
+      url: "http://model-gateway:8080"
+      transport: http
+      model_name: layout
   remote_layout:
     kind: layout_object_detection
     engine_options:
@@ -27,13 +43,21 @@ custom_layout_presets:
       transport: http
       model_name: layout
 
-# Table structure: KServe remote kind в docling пока WIP (catalog: "Work in progress").
-# Используем bundled TableFormer в образе docling-serve-cpu до появления api_kserve_v2 kind.
+# Table: remote KServe kind в docling WIP → bundled TableFormer в образе
 default_table_structure_preset: tableformer_v1_accurate
 
-# Picture classification → DocumentPictureClassifierOptions + api_kserve_v2 engine
+# Picture classification → registry["default"] перезаписываем custom preset
 default_picture_classification_preset: remote_pic_class
 custom_picture_classification_presets:
+  default:
+    engine_options:
+      engine_type: api_kserve_v2
+      url: "http://model-gateway:8080"
+      transport: http
+      model_name: picture_classifier
+    model_spec:
+      name: document_figure_classifier_v2
+      repo_id: docling-project/docling-document-picture-classifier-v2
   remote_pic_class:
     engine_options:
       engine_type: api_kserve_v2
@@ -89,5 +113,3 @@ allowed_picture_description_presets:
   - remote_pic_desc
 allowed_code_formula_presets:
   - remote_code_formula
-# allowed_ocr_presets: не задаём — policy docling-serve пересекает список с kind OCR-фабрики
-# (auto, easyocr, kserve_v2_ocr, …), а не с ID custom_ocr_presets.

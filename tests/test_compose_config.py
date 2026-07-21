@@ -29,15 +29,18 @@ def test_docling_serve_yaml_points_to_gateway():
     assert "http://model-gateway:8080" in yaml.dump(data)
     assert data.get("allowed_ocr_presets") is None
     assert data["default_ocr_preset"] == "remote_ocr"
-    layout = data["custom_layout_presets"]["remote_layout"]
-    assert layout["kind"] == "layout_object_detection"
-    assert layout["engine_options"]["engine_type"] == "api_kserve_v2"
-    assert layout["engine_options"]["model_name"] == "layout"
+    layout_default = data["custom_layout_presets"]["default"]
+    assert layout_default["kind"] == "layout_object_detection"
+    assert layout_default["engine_options"]["engine_type"] == "api_kserve_v2"
+    assert layout_default["engine_options"]["model_name"] == "layout"
+    ocr_auto = data["custom_ocr_presets"]["auto"]
+    assert ocr_auto["kind"] == "kserve_v2_ocr"
+    assert ocr_auto["model_name"] == "ocr"
     assert data["default_table_structure_preset"] == "tableformer_v1_accurate"
     assert "custom_table_structure_presets" not in data
-    pic = data["custom_picture_classification_presets"]["remote_pic_class"]
-    assert pic["engine_options"]["engine_type"] == "api_kserve_v2"
-    assert "kind" not in pic
+    pic_default = data["custom_picture_classification_presets"]["default"]
+    assert pic_default["engine_options"]["engine_type"] == "api_kserve_v2"
+    assert "kind" not in pic_default
 
 
 def test_env_defaults_has_required_keys():
