@@ -24,7 +24,10 @@ services:
     restart: unless-stopped
 
   docling-serve:
-    image: quay.io/docling-project/docling-serve-cpu:latest
+    build:
+      context: ./docling-serve
+      dockerfile: Dockerfile
+    image: doclingllm-docling-serve:local
     container_name: doclingllm-docling-serve
     depends_on:
       model-gateway:

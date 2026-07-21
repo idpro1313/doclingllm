@@ -268,9 +268,10 @@ doclingllm/
 | Сервис | Образ | Порты | Зависимости |
 |--------|-------|-------|-------------|
 | `model-gateway` | build `deploy/gateway/Dockerfile` | internal 8080 | — |
-| `docling-serve` | `quay.io/docling-project/docling-serve-cpu:latest` | `5001:5001` | `model-gateway` healthy |
+| `docling-serve` | build `deploy/docling-serve` → `doclingllm-docling-serve:local` (FROM upstream cpu + quiet logging overlay) | `5001:5001` | `model-gateway` healthy |
 
 Volumes: `./deploy/config` → `/config:ro` в docling-serve.  
+Overlay: `deploy/docling-serve/logging_config.py` — WARNING для httpx; filter access `/v1/status/poll` и `/health`.  
 Networks: `doclingllm-net` (bridge).  
 Secrets: через `.env`, не bake в образ.
 
