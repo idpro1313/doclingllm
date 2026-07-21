@@ -50,12 +50,12 @@ class GatewaySettings(BaseSettings):
     )
 
     vision_api_base_url: str = Field(
-        default="https://foundation-models.api.cloud.ru/v1",
+        default="https://ai-billing.develonica.group/v1",
         alias="VISION_API_BASE_URL",
     )
     vision_api_key: str = Field(default="", alias="VISION_API_KEY")
     vision_model: str = Field(
-        default="deepseek-ai/DeepSeek-OCR-2",
+        default="qwen3.6-35b-a3b",
         alias="VISION_MODEL",
     )
 

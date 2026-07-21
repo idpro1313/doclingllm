@@ -61,7 +61,7 @@ prompt_for_vision_api_key() {
     echo "Set VISION_API_KEY in ${ENV_FILE} or run ./scripts/start.sh interactively." >&2
     exit 1
   fi
-  echo -n "Enter Cloud.ru VISION_API_KEY: "
+  echo -n "Enter VISION_API_KEY (ai-billing.develonica.group): "
   read -rs vision_key
   echo
   if [[ -z "${vision_key}" ]]; then

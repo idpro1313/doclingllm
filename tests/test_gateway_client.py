@@ -41,7 +41,7 @@ def test_external_api_client_vision_call(gateway_settings, caplog):
 
     def handler(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content.decode())
-        assert body["model"] == "deepseek-ai/DeepSeek-OCR-2"
+        assert body["model"] == "qwen3.6-35b-a3b"
         assert "Authorization" in request.headers
         return httpx.Response(
             200,

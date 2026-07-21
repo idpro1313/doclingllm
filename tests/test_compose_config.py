@@ -63,7 +63,9 @@ def test_env_defaults_has_required_keys():
     text = defaults_path.read_text(encoding="utf-8")
     for key in (
         "VISION_API_BASE_URL",
+        "ai-billing.develonica.group",
         "VISION_API_KEY=",
+        "VISION_MODEL=qwen3.6-35b-a3b",
         "DOCLING_SERVE_ENABLE_UI=true",
         "TEXT_API_BASE_URL",
     ):

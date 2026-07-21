@@ -73,7 +73,7 @@ stages:
   ocr:
     endpoint: vision
     mode: openai_vision
-    model: deepseek-ai/DeepSeek-OCR-2
+    model: "${VISION_MODEL}"
     path: /chat/completions
     response_parser: deepseek_ocr_json
   code_formula:
@@ -84,7 +84,7 @@ stages:
   vlm:
     endpoint: vision
     mode: openai_proxy
-    model: deepseek-ai/DeepSeek-OCR-2
+    model: "${VISION_MODEL}"
     path: /chat/completions
 """,
         encoding="utf-8",

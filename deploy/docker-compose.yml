@@ -7,7 +7,7 @@ services:
     env_file:
       - .env
     environment:
-      # Optional corporate proxy for Cloud.ru HTTPS (set in deploy/.env)
+      # Optional corporate proxy for vision HTTPS (set in deploy/.env)
       HTTP_PROXY: ${HTTP_PROXY:-}
       HTTPS_PROXY: ${HTTPS_PROXY:-}
       NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,model-gateway,docling-serve}

@@ -16,14 +16,14 @@ stages:
   ocr:
     endpoint: vision
     mode: openai_vision
-    model: deepseek-ai/DeepSeek-OCR-2
+    model: "${VISION_MODEL}"
     path: /chat/completions
     response_parser: deepseek_ocr_json
 
   layout:
     endpoint: vision
     mode: openai_vision
-    model: deepseek-ai/DeepSeek-OCR-2
+    model: "${VISION_MODEL}"
     path: /chat/completions
     response_parser: layout_boxes_json
     system_prompt: "Detect document layout regions. Return JSON array of {label, bbox:[x1,y1,x2,y2]}."
@@ -31,7 +31,7 @@ stages:
   table:
     endpoint: vision
     mode: openai_vision
-    model: deepseek-ai/DeepSeek-OCR-2
+    model: "${VISION_MODEL}"
     path: /chat/completions
     response_parser: table_structure_json
     system_prompt: "Extract table cell grid from image. Return JSON with rows/cols/cells."
@@ -39,20 +39,20 @@ stages:
   picture_classification:
     endpoint: vision
     mode: openai_vision
-    model: deepseek-ai/DeepSeek-OCR-2
+    model: "${VISION_MODEL}"
     path: /chat/completions
     response_parser: classification_json
 
   picture_description:
     endpoint: vision
     mode: openai_vision
-    model: deepseek-ai/DeepSeek-OCR-2
+    model: "${VISION_MODEL}"
     path: /chat/completions
 
   vlm:
     endpoint: vision
     mode: openai_proxy
-    model: deepseek-ai/DeepSeek-OCR-2
+    model: "${VISION_MODEL}"
     path: /chat/completions
 
   code_formula:

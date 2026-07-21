@@ -44,14 +44,14 @@ $START_DEV_PLAN
 
 | Backend | URL | Модель | Auth | Стадии docling |
 |---------|-----|--------|------|----------------|
-| **vision** (Cloud.ru) | `https://foundation-models.api.cloud.ru/v1` | `deepseek-ai/DeepSeek-OCR-2` | Bearer token (env `VISION_API_KEY`) | OCR, layout, table, picture_*, VLM pipeline |
+| **vision** (Develonica) | `https://ai-billing.develonica.group/v1` | `qwen3.6-35b-a3b` (`VISION_MODEL`) | Bearer (`VISION_API_KEY`) | OCR, layout, table, picture_*, VLM pipeline |
 | **text** (LAN) | `http://192.168.101.15:8111/v1` | `minimax-m2.7` | нет | code/formula enrichment (текст) |
 
-**Ключевая идея:** `DeepSeek-OCR-2` — multimodal OCR/VLM; KServe-стадии (ocr/layout/table) в gateway транслируются в `POST /chat/completions` с image + structured prompt, ответ парсится в KServe tensor format. Текстовые стадии без image → `minimax-m2.7` на LAN.
+**Ключевая идея:** vision — OpenAI-compatible multimodal (Qwen3.6); KServe-стадии в gateway → `POST /chat/completions` + parse → tensors. Text → `minimax-m2.7` на LAN.
 
-**Сеть Docker:** контейнер `model-gateway` должен иметь маршрут до `192.168.101.15:8111` (LAN). Cloud.ru — исходящий HTTPS.
+**Сеть Docker:** `model-gateway` → LAN minimax и HTTPS к `ai-billing.develonica.group`.
 
-**Секреты:** токен Cloud.ru **только** в `deploy/.env` (в git не попадает). Шаблон: `deploy/.env.example`.
+**Секреты:** `VISION_API_KEY` **только** в `deploy/.env`. Шаблон: `deploy/.env.example` / `.env.defaults`.
 
 **Артефакты конфигурации (draft):**
 - `deploy/.env.example`
@@ -198,7 +198,7 @@ $START_DEV_PLAN
 9. **Step 9:** Model Gateway в `infer_handler`:
    - декодирует tensor payload (image bytes, metadata lang/scale)
    - по `gateway-models.yaml` выбирает backend `vision` или `text`
-   - **vision:** `POST https://foundation-models.api.cloud.ru/v1/chat/completions` с `Authorization: Bearer $VISION_API_KEY`, model `deepseek-ai/DeepSeek-OCR-2`
+   - **vision:** `POST https://ai-billing.develonica.group/v1/chat/completions` с `Authorization: Bearer $VISION_API_KEY`, model из `VISION_MODEL`
    - **text:** `POST http://192.168.101.15:8111/v1/chat/completions`, model `minimax-m2.7`, без auth
    - парсит JSON/text ответ → KServe v2 response tensors для docling
 10. **Step 10:** docling-serve собирает Document, возвращает JSON/HTML/Markdown клиенту.
@@ -206,7 +206,7 @@ $START_DEV_PLAN
 #### 2.4. Контракт адаптера custom API (Phase 1 — минимальный)
 
 11. **Step 11:** Gateway modes в `gateway-models.yaml`:
-    - **`openai_vision`** → Cloud.ru DeepSeek-OCR-2 (OCR, layout, table, picture_*)
+    - **`openai_vision`** → Develonica vision / `VISION_MODEL` (OCR, layout, table, picture_*)
     - **`openai_proxy`** → pass-through chat/completions для VLM preset docling
     - **`openai_text`** → minimax-m2.7 для code/formula
 12. **Step 12:** Response parsers (`deepseek_ocr_json`, `layout_boxes_json`, `table_structure_json`) конвертируют ответ LLM в tensor layout docling. Контракт парсеров — в `docs/gateway_api_contract.md` (Phase P8).

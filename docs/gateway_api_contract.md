@@ -1,15 +1,15 @@
 # Gateway API Contract
 
-Контракт между **docling-serve**, **Model Gateway** и внешними API (Cloud.ru + LAN minimax).
+Контракт между **docling-serve**, **Model Gateway** и внешними API (Develonica vision + LAN minimax).
 
 ## Backends
 
-| Backend | URL (env) | Model | Auth |
-|---------|-----------|-------|------|
-| vision | `VISION_API_BASE_URL` | `deepseek-ai/DeepSeek-OCR-2` | `VISION_API_KEY` Bearer |
+| Backend | URL (env) | Model (env) | Auth |
+|---------|-----------|-------------|------|
+| vision | `VISION_API_BASE_URL` (default `https://ai-billing.develonica.group/v1`) | `VISION_MODEL` (default `qwen3.6-35b-a3b`) | `VISION_API_KEY` Bearer |
 | text | `TEXT_API_BASE_URL` | `minimax-m2.7` | нет |
 
-Опционально для egress: `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY` (httpx `trust_env=True`). При TLS `UNEXPECTED_EOF` к Cloud.ru — сначала сеть/прокси, не контракт KServe.
+Опционально для egress: `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY` (httpx `trust_env=True`).
 
 ## Gateway endpoints (internal)
 
@@ -80,7 +80,7 @@ Gateway принимает `POST /v1/chat/completions` и маршрутизир
 
 - `model=minimax-m2.7` → text backend (LAN)
 - multimodal messages (`image_url`) → vision backend
-- иначе → VLM preset (Cloud.ru)
+- иначе → VLM preset (vision backend)
 
 Authorization добавляется только для vision backend.
 
@@ -105,7 +105,7 @@ chmod +x scripts/*.sh   # не нужно, если clone с git (mode 100755)
 ./scripts/healthcheck.sh
 ```
 
-При первом запуске скрипт копирует `deploy/.env.defaults` → `deploy/.env` и **интерактивно запрашивает** Cloud.ru `VISION_API_KEY` (ввод скрыт). Токен сохраняется только в `deploy/.env` (gitignored).
+При первом запуске скрипт копирует `deploy/.env.defaults` → `deploy/.env` и **интерактивно запрашивает** `VISION_API_KEY` (ввод скрыт). Токен сохраняется только в `deploy/.env` (gitignored).
 
 **UI (Gradio demo):** http://localhost:5001/ui — включено через `DOCLING_SERVE_ENABLE_UI=true`.
 

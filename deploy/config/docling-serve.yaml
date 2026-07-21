@@ -78,12 +78,12 @@ custom_vlm_presets:
       engine_type: api
       url: "http://model-gateway:8080/v1/chat/completions"
       params:
-        model: deepseek-ai/DeepSeek-OCR-2
+        model: qwen3.6-35b-a3b
       timeout: 120.0
       concurrency: 1
     model_spec:
-      name: DeepSeek-OCR-2-Remote
-      default_repo_id: deepseek-ai/DeepSeek-OCR-2
+      name: Qwen3.6-35B-A3B-Remote
+      default_repo_id: Qwen/Qwen3.6-35B-A3B
       prompt: "Convert this page to docling."
       response_format: markdown
 
@@ -95,12 +95,12 @@ custom_picture_description_presets:
       engine_type: api
       url: "http://model-gateway:8080/v1/chat/completions"
       params:
-        model: deepseek-ai/DeepSeek-OCR-2
+        model: qwen3.6-35b-a3b
       timeout: 120.0
       concurrency: 1
     model_spec:
-      name: DeepSeek-OCR-2-PictureDesc
-      default_repo_id: deepseek-ai/DeepSeek-OCR-2
+      name: Qwen3.6-35B-A3B-PictureDesc
+      default_repo_id: Qwen/Qwen3.6-35B-A3B
       prompt: "Describe this picture from a document. Be concise and accurate."
       response_format: plain
     prompt: "Describe this picture from a document. Be concise and accurate."

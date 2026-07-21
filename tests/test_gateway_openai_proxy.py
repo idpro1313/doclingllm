@@ -15,7 +15,7 @@ pytest_plugins = ["tests.conftest_gateway"]
 
 
 def test_select_openai_route_vlm(gateway_settings, routing_table):
-    body = {"model": "deepseek-ai/DeepSeek-OCR-2", "messages": [{"role": "user", "content": "hi"}]}
+    body = {"model": "qwen3.6-35b-a3b", "messages": [{"role": "user", "content": "hi"}]}
     route = select_openai_route(body, routing_table, gateway_settings)
     assert route.stage == "vlm"
 
@@ -36,7 +36,7 @@ def test_handle_openai_proxy_passthrough(gateway_settings, routing_table):
 
     transport = httpx.MockTransport(handler)
     client = ExternalApiClient(gateway_settings, client=httpx.Client(transport=transport))
-    body = {"model": "deepseek-ai/DeepSeek-OCR-2", "messages": [{"role": "user", "content": "test"}]}
+    body = {"model": "qwen3.6-35b-a3b", "messages": [{"role": "user", "content": "test"}]}
 
     result = handle_openai_proxy(body, client, routing_table, gateway_settings)
     assert result["choices"][0]["message"]["content"] == "ok"

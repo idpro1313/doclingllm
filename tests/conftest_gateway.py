@@ -17,8 +17,8 @@ TINY_PNG_BYTES = base64.standard_b64decode(TINY_PNG_B64)
 
 @pytest.fixture
 def gateway_settings(sample_routing_yaml, monkeypatch) -> GatewaySettings:
-    monkeypatch.setenv("VISION_API_BASE_URL", "https://foundation-models.api.cloud.ru/v1")
-    monkeypatch.setenv("VISION_MODEL", "deepseek-ai/DeepSeek-OCR-2")
+    monkeypatch.setenv("VISION_API_BASE_URL", "https://ai-billing.develonica.group/v1")
+    monkeypatch.setenv("VISION_MODEL", "qwen3.6-35b-a3b")
     monkeypatch.setenv("VISION_API_KEY", "test-vision-key")
     monkeypatch.setenv("TEXT_API_BASE_URL", "http://192.168.101.15:8111/v1")
     monkeypatch.setenv("TEXT_MODEL", "minimax-m2.7")

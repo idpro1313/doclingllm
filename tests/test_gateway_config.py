@@ -41,13 +41,13 @@ def _print_ldd_trajectory(records, min_imp: int = 7) -> bool:
 ## @purpose Ensure ${VAR} expansion replaces known keys and leaves unknown keys empty.
 def test_substitute_env_placeholders():
     env_map = {
-        "VISION_API_BASE_URL": "https://foundation-models.api.cloud.ru/v1",
-        "VISION_MODEL": "deepseek-ai/DeepSeek-OCR-2",
+        "VISION_API_BASE_URL": "https://ai-billing.develonica.group/v1",
+        "VISION_MODEL": "qwen3.6-35b-a3b",
     }
     raw = "${VISION_API_BASE_URL}/chat/completions model=${VISION_MODEL} missing=${UNKNOWN}"
     result = substitute_env_placeholders(raw, env_map)
-    assert "https://foundation-models.api.cloud.ru/v1" in result
-    assert "deepseek-ai/DeepSeek-OCR-2" in result
+    assert "https://ai-billing.develonica.group/v1" in result
+    assert "qwen3.6-35b-a3b" in result
     assert "${UNKNOWN}" not in result
 
 
@@ -82,11 +82,11 @@ def test_load_gateway_settings_from_env(clear_settings_cache, monkeypatch, caplo
 
 
 # region FUNC_test_load_routing_table [DOMAIN(9): Testing; TECH(9): pytest, caplog]
-## @purpose Verify YAML routing table loads with env substitution and resolves OCR to Cloud.ru route.
+## @purpose Verify YAML routing table loads with env substitution and resolves OCR to vision route.
 def test_load_routing_table(sample_routing_yaml, clear_settings_cache, monkeypatch, caplog):
     caplog.set_level(logging.INFO)
-    monkeypatch.setenv("VISION_API_BASE_URL", "https://foundation-models.api.cloud.ru/v1")
-    monkeypatch.setenv("VISION_MODEL", "deepseek-ai/DeepSeek-OCR-2")
+    monkeypatch.setenv("VISION_API_BASE_URL", "https://ai-billing.develonica.group/v1")
+    monkeypatch.setenv("VISION_MODEL", "qwen3.6-35b-a3b")
     monkeypatch.setenv("TEXT_API_BASE_URL", "http://192.168.101.15:8111/v1")
     monkeypatch.setenv("TEXT_MODEL", "minimax-m2.7")
     monkeypatch.setenv("VISION_API_KEY", "secret-vision-token")
@@ -97,14 +97,14 @@ def test_load_routing_table(sample_routing_yaml, clear_settings_cache, monkeypat
     table = load_routing_table(sample_routing_yaml, settings)
 
     assert "vision" in table.endpoints
-    assert table.endpoints["vision"].base_url == "https://foundation-models.api.cloud.ru/v1"
+    assert table.endpoints["vision"].base_url == "https://ai-billing.develonica.group/v1"
     assert "ocr" in table.stages
     assert len(table.stages) == 3
 
     ocr_route = resolve_stage_route("ocr", table, settings)
     assert ocr_route.mode == "openai_vision"
-    assert ocr_route.model == "deepseek-ai/DeepSeek-OCR-2"
-    assert ocr_route.request_url == "https://foundation-models.api.cloud.ru/v1/chat/completions"
+    assert ocr_route.model == "qwen3.6-35b-a3b"
+    assert ocr_route.request_url == "https://ai-billing.develonica.group/v1/chat/completions"
     assert ocr_route.api_key == "secret-vision-token"
     assert ocr_route.response_parser == "deepseek_ocr_json"
 
@@ -148,8 +148,8 @@ def test_load_production_routing_yaml(clear_settings_cache, monkeypatch):
     if not yaml_path.is_file():
         pytest.skip("Production gateway-models.yaml not present")
 
-    monkeypatch.setenv("VISION_API_BASE_URL", "https://foundation-models.api.cloud.ru/v1")
-    monkeypatch.setenv("VISION_MODEL", "deepseek-ai/DeepSeek-OCR-2")
+    monkeypatch.setenv("VISION_API_BASE_URL", "https://ai-billing.develonica.group/v1")
+    monkeypatch.setenv("VISION_MODEL", "qwen3.6-35b-a3b")
     monkeypatch.setenv("TEXT_API_BASE_URL", "http://192.168.101.15:8111/v1")
     monkeypatch.setenv("TEXT_MODEL", "minimax-m2.7")
 
@@ -159,7 +159,8 @@ def test_load_production_routing_yaml(clear_settings_cache, monkeypatch):
     assert len(table.stages) >= 7
     vlm_route = resolve_stage_route("vlm", table, settings)
     assert vlm_route.mode == "openai_proxy"
-    assert "foundation-models.api.cloud.ru" in vlm_route.request_url
+    assert "ai-billing.develonica.group" in vlm_route.request_url
+    assert vlm_route.model == "qwen3.6-35b-a3b"
 
 
 # endregion FUNC_test_load_production_routing_yaml
