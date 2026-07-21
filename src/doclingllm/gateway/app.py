@@ -2,14 +2,14 @@
 ## @modulecontract
 ## @purpose ASGI application exposing health, KServe v2 infer, and OpenAI proxy endpoints for docling-serve integration.
 ## @changes
-## LAST_CHANGE: [v0.2.12 – map UpstreamApiError from external TLS/connect failures to HTTP 502.]
+## LAST_CHANGE: [v0.2.15 – configure TRACE logging; correlate DOCLING/MODEL/GATEWAY hops by request_id.]
 ## @modulemap
 ## FUNC 10[Application factory] => create_app
 def _module_contract():
     pass
 # endregion MODULE_CONTRACT
-# GREP_SUMMARY: FastAPI, app, health, KServe, OpenAI, uvicorn, gateway server, UpstreamApiError, 502
-# STRUCTURE: ▶ create_app → ◇ lifespan load config/routing → ⊕ register routes → ⎋ FastAPI
+# GREP_SUMMARY: FastAPI, app, health, KServe, OpenAI, uvicorn, gateway server, UpstreamApiError, TRACE, request_id
+# STRUCTURE: ▶ create_app → ◇ configure logging → ⊕ routes with begin_request_trace → ⎋ FastAPI
 
 import logging
 from contextlib import asynccontextmanager
@@ -28,9 +28,12 @@ from doclingllm.gateway.kserve import (
 from doclingllm.gateway.kserve_binary import parse_kserve_infer_request
 from doclingllm.gateway.openai_proxy import handle_openai_proxy
 from doclingllm.gateway.request_logging import (
+    begin_request_trace,
+    configure_gateway_logging,
     log_docling_kserve_request,
     log_docling_openai_request,
     log_gateway_kserve_response,
+    log_gateway_openai_response,
 )
 from doclingllm.gateway.routing import RoutingTable, load_routing_table
 
@@ -63,6 +66,7 @@ def create_app(
     client: Optional[ExternalApiClient] = None,
 ) -> FastAPI:
     resolved_settings = settings or load_gateway_settings()
+    configure_gateway_logging(resolved_settings.gateway_log_level)
     resolved_table = routing_table or load_routing_table(
         resolved_settings.gateway_models_config_path,
         resolved_settings,
@@ -76,7 +80,8 @@ def create_app(
         app.state.gateway = state
         logger.info(
             f"[IMP:9][create_app][STARTUP] Gateway ready on "
-            f"{resolved_settings.gateway_host}:{resolved_settings.gateway_port} [OK]"
+            f"{resolved_settings.gateway_host}:{resolved_settings.gateway_port} "
+            f"log_level={resolved_settings.gateway_log_level} [OK]"
         )
         yield
         if owns_client:
@@ -113,9 +118,21 @@ def create_app(
         if model_name not in KSERVE_MODEL_TO_STAGE:
             raise HTTPException(status_code=404, detail=f"Unknown model: {model_name}")
         try:
+            request_id = begin_request_trace(prefix=f"kserve-{model_name}")
             raw_body = await request.body()
+            content_type = request.headers.get("content-type", "")
+            header_len = request.headers.get("Inference-Header-Content-Length")
+            framing = {
+                "content_type": content_type,
+                "content_length": request.headers.get("content-length"),
+                "inference_header_content_length": header_len,
+                "raw_body_bytes": len(raw_body),
+                "binary_framing": bool(header_len)
+                or "octet-stream" in content_type.lower(),
+                "request_id": request_id,
+            }
             body = parse_kserve_infer_request(raw_body, request.headers)
-            log_docling_kserve_request(logger, model_name, body)
+            log_docling_kserve_request(logger, model_name, body, framing=framing)
             result = handle_kserve_infer(
                 model_name,
                 body,
@@ -142,6 +159,7 @@ def create_app(
     @app.post("/v1/chat/completions")
     async def openai_chat_completions(request: Request) -> JSONResponse:
         state: GatewayState = app.state.gateway
+        begin_request_trace(prefix="openai")
         body = await request.json()
         log_docling_openai_request(logger, body)
         try:
@@ -151,6 +169,7 @@ def create_app(
                 state.routing_table,
                 state.settings,
             )
+            log_gateway_openai_response(logger, result)
             return JSONResponse(content=result)
         except UpstreamApiError as exc:
             logger.critical(

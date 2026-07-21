@@ -69,6 +69,7 @@ class GatewaySettings(BaseSettings):
     gateway_host: str = Field(default="0.0.0.0", alias="GATEWAY_HOST")
     gateway_port: int = Field(default=8080, alias="GATEWAY_PORT")
     gateway_request_timeout: float = Field(default=120.0, alias="GATEWAY_REQUEST_TIMEOUT")
+    gateway_log_level: str = Field(default="INFO", alias="GATEWAY_LOG_LEVEL")
 
     gateway_models_config_path: Path = Field(
         default=_DEFAULT_MODELS_YAML,

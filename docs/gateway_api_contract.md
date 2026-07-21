@@ -11,6 +11,19 @@
 
 Опционально для egress: `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY` (httpx `trust_env=True`).
 
+### Gateway TRACE logs
+
+В логах `model-gateway` (после 0.2.15) ищите по `rid=` или маркерам:
+
+| Маркер | Направление |
+|--------|-------------|
+| `DOCLING_IN` | docling → gateway (KServe inputs / OpenAI body + framing) |
+| `MODEL_OUT` | gateway → vision/text API (prompt, model; image = size placeholder) |
+| `MODEL_IN` | model → gateway (полный текст ответа ассистента, до ~8k) |
+| `GATEWAY_OUT` | gateway → docling (KServe tensors summary / OpenAI response) |
+
+`GATEWAY_LOG_LEVEL=INFO` (default). Картинки/base64 не дампятся.
+
 ## Gateway endpoints (internal)
 
 | Method | Path | Consumer |

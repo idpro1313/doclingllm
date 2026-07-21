@@ -6,6 +6,9 @@ def _module_contract():
 import logging
 
 from doclingllm.gateway.request_logging import (
+    begin_request_trace,
+    configure_gateway_logging,
+    current_request_id,
     log_docling_kserve_request,
     log_model_inbound_response,
     log_model_outbound_request,
@@ -32,9 +35,24 @@ def test_summarize_kserve_infer_request_redacts_tensor_data():
     assert "sample" in summary["inputs"][0]["data"]
 
 
+def test_summarize_kserve_shows_short_text_bytes():
+    body = {
+        "inputs": [
+            {
+                "name": "lang_type",
+                "datatype": "BYTES",
+                "shape": [1, 1],
+                "data": ["en"],
+            }
+        ]
+    }
+    summary = summarize_kserve_infer_request("ocr", body)
+    assert summary["inputs"][0]["data"]["values"] == ["en"]
+
+
 def test_summarize_openai_chat_payload_redacts_image():
     payload = {
-        "model": "deepseek-ai/DeepSeek-OCR-2",
+        "model": "qwen3.6-35b-a3b",
         "messages": [
             {
                 "role": "user",
@@ -58,7 +76,7 @@ def test_summarize_openai_chat_payload_redacts_image():
 def test_summarize_openai_response_includes_assistant_preview():
     response = {
         "id": "cmpl-1",
-        "model": "deepseek-ai/DeepSeek-OCR-2",
+        "model": "qwen3.6-35b-a3b",
         "choices": [{"message": {"role": "assistant", "content": '{"boxes":[]}'}}],
     }
     summary = summarize_openai_response(response)
@@ -66,8 +84,12 @@ def test_summarize_openai_response_includes_assistant_preview():
 
 
 def test_request_logging_emits_trace_lines(caplog):
+    configure_gateway_logging("INFO")
     caplog.set_level(logging.INFO)
-    active_logger = logging.getLogger("test.gateway.request_logging")
+    active_logger = logging.getLogger("doclingllm.gateway.test_trace")
+
+    rid = begin_request_trace("test")
+    assert current_request_id() == rid
 
     log_docling_kserve_request(
         active_logger,
@@ -82,13 +104,14 @@ def test_request_logging_emits_trace_lines(caplog):
                 }
             ]
         },
+        framing={"binary_framing": True, "raw_body_bytes": 99},
     )
     log_model_outbound_request(
         active_logger,
         stage="layout",
         request_url="https://example.com/v1/chat/completions",
         payload={
-            "model": "deepseek-ai/DeepSeek-OCR-2",
+            "model": "qwen3.6-35b-a3b",
             "messages": [{"role": "user", "content": "detect layout"}],
         },
     )
@@ -102,6 +125,9 @@ def test_request_logging_emits_trace_lines(caplog):
     )
 
     messages = [record.message for record in caplog.records]
-    assert any("[DOCLING_IN]" in message for message in messages)
-    assert any("[MODEL_OUT]" in message for message in messages)
-    assert any("[MODEL_IN]" in message for message in messages)
+    joined = "\n".join(messages)
+    assert "[DOCLING_IN]" in joined
+    assert "[MODEL_OUT]" in joined
+    assert "[MODEL_IN]" in joined
+    assert f"rid={rid}" in joined
+    assert "BEGIN DOCLING_IN" in joined
