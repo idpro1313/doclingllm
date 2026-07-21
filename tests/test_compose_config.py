@@ -29,6 +29,15 @@ def test_docling_serve_yaml_points_to_gateway():
     assert "http://model-gateway:8080" in yaml.dump(data)
     assert data.get("allowed_ocr_presets") is None
     assert data["default_ocr_preset"] == "remote_ocr"
+    layout = data["custom_layout_presets"]["remote_layout"]
+    assert layout["kind"] == "layout_object_detection"
+    assert layout["engine_options"]["engine_type"] == "api_kserve_v2"
+    assert layout["engine_options"]["model_name"] == "layout"
+    assert data["default_table_structure_preset"] == "tableformer_v1_accurate"
+    assert "custom_table_structure_presets" not in data
+    pic = data["custom_picture_classification_presets"]["remote_pic_class"]
+    assert pic["engine_options"]["engine_type"] == "api_kserve_v2"
+    assert "kind" not in pic
 
 
 def test_env_defaults_has_required_keys():

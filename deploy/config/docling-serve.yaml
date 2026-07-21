@@ -5,7 +5,7 @@ enable_remote_services: true
 load_models_at_boot: false
 log_format: json
 
-# OCR → KServe v2 HTTP on gateway
+# OCR → dedicated KServe v2 OCR kind (единственный stage с kind kserve_v2_ocr)
 default_ocr_kind: kserve_v2_ocr
 default_ocr_preset: remote_ocr
 custom_ocr_presets:
@@ -15,32 +15,34 @@ custom_ocr_presets:
     transport: http
     model_name: ocr
 
-# Layout → KServe v2 on gateway (object detection)
+# Layout → layout_object_detection + engine api_kserve_v2 (НЕ kserve_v2_ocr)
+default_layout_kind: layout_object_detection
 default_layout_preset: remote_layout
 custom_layout_presets:
   remote_layout:
-    kind: kserve_v2_ocr
-    url: "http://model-gateway:8080"
-    transport: http
-    model_name: layout
+    kind: layout_object_detection
+    engine_options:
+      engine_type: api_kserve_v2
+      url: "http://model-gateway:8080"
+      transport: http
+      model_name: layout
 
-# Table structure → KServe v2 on gateway
-default_table_structure_preset: remote_table
-custom_table_structure_presets:
-  remote_table:
-    kind: kserve_v2_ocr
-    url: "http://model-gateway:8080"
-    transport: http
-    model_name: table
+# Table structure: KServe remote kind в docling пока WIP (catalog: "Work in progress").
+# Используем bundled TableFormer в образе docling-serve-cpu до появления api_kserve_v2 kind.
+default_table_structure_preset: tableformer_v1_accurate
 
-# Picture classification
+# Picture classification → DocumentPictureClassifierOptions + api_kserve_v2 engine
 default_picture_classification_preset: remote_pic_class
 custom_picture_classification_presets:
   remote_pic_class:
-    kind: kserve_v2_ocr
-    url: "http://model-gateway:8080"
-    transport: http
-    model_name: picture_classifier
+    engine_options:
+      engine_type: api_kserve_v2
+      url: "http://model-gateway:8080"
+      transport: http
+      model_name: picture_classifier
+    model_spec:
+      name: document_figure_classifier_v2
+      repo_id: docling-project/docling-document-picture-classifier-v2
 
 # VLM pipeline → OpenAI-compatible proxy on gateway
 default_vlm_preset: remote_vlm
@@ -88,5 +90,4 @@ allowed_picture_description_presets:
 allowed_code_formula_presets:
   - remote_code_formula
 # allowed_ocr_presets: не задаём — policy docling-serve пересекает список с kind OCR-фабрики
-# (auto, easyocr, kserve_v2_ocr, …), а не с ID custom_ocr_presets. Значение remote_ocr
-# давало Allowed values: [] и блокировало ocr_preset auto из UI/API.
+# (auto, easyocr, kserve_v2_ocr, …), а не с ID custom_ocr_presets.
