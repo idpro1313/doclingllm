@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Doxygen
+doxygen_output/
+*.tag
+
+# Anti-Loop (mode-code)
+.test_counter.json
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+Thumbs.db
+
+# Logs
+*.log
+
+# Cursor / Kilo Code / Doxygen — только локально (копия из шаблона; см. agent-rules.mdc)
+.cursor/
+.kilocode/
+.kilo/
+Prompts.xml
+Doxyfile
+kilo.json
+kilo.jsonc
+
+# Журнал агента (вести локально; см. agent-rules.mdc)
+docs/HISTORY.md
+
+# Вспомогательные артефакты агента (отчёты, черновики) — см. agent-rules.mdc §7
+work/*
+!work/README.md
