@@ -1,3 +1,3 @@
 """doclingllm — обёртка docling-serve с Model Gateway."""
 
-__version__ = "0.2.1"
+__version__ = "0.2.2"
