@@ -1,7 +1,7 @@
 # Thin overlay on upstream docling-serve-cpu:
 # - quieter access logs
 # - API+Gradio inject vlm_pipeline_preset=default (avoids legacy local granite)
-FROM quay.io/docling-project/docling-serve-cpu:latest
+FROM quay.io/docling-project/docling-serve-cpu:v1.27.0
 
 COPY logging_config.py /opt/app-root/src/doclingllm_logging_config.py
 COPY vlm_preset_middleware.py /opt/app-root/src/doclingllm_vlm_preset_middleware.py

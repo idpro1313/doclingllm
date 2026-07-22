@@ -255,7 +255,7 @@ services:
 **Dependencies (gateway):**
 
 ```text
-gradio>=5.0,<6.0    # Admin UI mounted in FastAPI; pin after smoke
+gradio>=6.20.0,<7.0    # Admin UI mounted in FastAPI; v0.3.2 bump
 ```
 
 ---

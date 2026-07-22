@@ -369,7 +369,7 @@ flowchart LR
 
 **Сеть LAN (решение по умолчанию):** bridge + прямой IP `192.168.101.15` (работает если Ubuntu-маршрутизатор видит LAN). Fallback: `network_mode: host` для gateway — documented in `scripts/start.sh` comment.
 
-**Pin образа:** `docling-serve-cpu:<version>` — не `latest` (риск breaking presets).
+**Pin образа:** `docling-serve-cpu:v1.27.0` — не `latest` (риск breaking presets).
 
 **Volumes:**
 
@@ -445,7 +445,7 @@ $START_BODY
 
 | Компонент | Технология | Обоснование |
 |-----------|------------|-------------|
-| Gateway runtime | Python 3.12 | Align with docling-serve Containerfile |
+| Gateway runtime | Python 3.13 | gateway Dockerfile slim |
 | HTTP server | FastAPI + uvicorn | Async, OpenAPI for debug, ASGI standard |
 | Outbound HTTP | httpx | Async, timeouts, compatible with pytest mock |
 | Config | pydantic-settings + PyYAML | Env > YAML; typed validation |
@@ -457,12 +457,14 @@ $START_BODY
 **requirements-gateway.txt** (для Code-агента):
 
 ```text
-fastapi>=0.115.0      # ASGI routes KServe + OpenAI proxy
-uvicorn>=0.32.0       # Production server in gateway container
-httpx>=0.28.0         # Async outbound to vision API and LAN
-pydantic-settings>=2  # Typed env/YAML config loading
-numpy>=2.0.0          # KServe tensor encode/decode
-pyyaml>=6.0           # gateway-models.yaml declarative routing
+fastapi>=0.139.2      # ASGI routes KServe + OpenAI proxy
+uvicorn>=0.51.0       # Production server in gateway container
+httpx>=0.28.1         # Async outbound to vision API and LAN
+pydantic-settings>=2.14.2  # Typed env/YAML config loading
+numpy>=2.5.1          # KServe tensor encode/decode
+pyyaml>=6.0.3         # gateway-models.yaml declarative routing
+pillow>=12.3.0        # KServe UINT8 tensor to PNG
+gradio>=6.20.0,<7.0   # Admin UI
 ```
 
 $END_BODY

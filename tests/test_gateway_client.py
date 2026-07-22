@@ -74,3 +74,31 @@ def test_external_api_client_text_route(gateway_settings, caplog):
     data = client.chat_completions(route, [{"role": "user", "content": "formula?"}])
     assert extract_assistant_content(data) == "E=mc^2"
     client.close()
+
+
+def test_external_api_client_retries_read_timeout(gateway_settings, caplog):
+    caplog.set_level(logging.INFO)
+    settings = gateway_settings.model_copy(update={"gateway_upstream_retries": 1})
+    table = load_routing_table(settings.gateway_models_config_path, settings)
+    route = resolve_stage_route("layout", table, settings)
+    attempts = {"count": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            raise httpx.ReadTimeout("The read operation timed out")
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": '{"boxes":[]}'}}]},
+        )
+
+    transport = httpx.MockTransport(handler)
+    client = ExternalApiClient(settings, client=httpx.Client(transport=transport))
+    data = client.chat_completions(route, [{"role": "user", "content": "layout?"}])
+    assert attempts["count"] == 2
+    assert extract_assistant_content(data) == '{"boxes":[]}'
+    assert any(
+        "[IMP:8][ExternalApiClient.chat_completions][RETRY]" in record.message
+        for record in caplog.records
+    )
+    client.close()

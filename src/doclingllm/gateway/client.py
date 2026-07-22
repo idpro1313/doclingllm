@@ -10,7 +10,7 @@
 ## - Authorization header is NEVER logged.
 ## - chat_completions raises httpx.HTTPStatusError on 4xx/5xx after logging IMP:10.
 ## @changes
-## LAST_CHANGE: [v0.2.12 – UpstreamApiError for ConnectError/TLS; trust_env proxy via httpx.]
+## LAST_CHANGE: [v0.3.1 – Retry on ReadTimeout/ConnectTimeout; trust_env proxy via httpx.]
 ## @modulemap
 ## CLASS 10[Outbound HTTP client] => ExternalApiClient
 ## CLASS 8[Upstream transport/HTTP failure] => UpstreamApiError
@@ -36,6 +36,13 @@ from doclingllm.gateway.request_logging import (
 from doclingllm.gateway.routing import StageRoute
 
 logger = logging.getLogger(__name__)
+
+_RETRYABLE_TRANSPORT_ERRORS = (
+    httpx.ReadTimeout,
+    httpx.ConnectTimeout,
+    httpx.WriteTimeout,
+    httpx.PoolTimeout,
+)
 
 
 # region CLASS_UpstreamApiError [DOMAIN(8): HTTPClient; CONCEPT(9): UpstreamFailure; TECH(8): Exception]
@@ -77,6 +84,45 @@ class ExternalApiClient:
             headers["Authorization"] = f"Bearer {route.api_key}"
         return headers
 
+    def _post_json_with_retry(
+        self,
+        route: StageRoute,
+        *,
+        payload: dict[str, Any],
+        log_prefix: str,
+    ) -> httpx.Response:
+        max_attempts = 1 + max(0, self._settings.gateway_upstream_retries)
+        last_error: httpx.RequestError | None = None
+        for attempt in range(1, max_attempts + 1):
+            try:
+                return self._client.post(
+                    route.request_url,
+                    headers=self._build_headers(route),
+                    json=payload,
+                )
+            except httpx.RequestError as exc:
+                last_error = exc
+                retryable = isinstance(exc, _RETRYABLE_TRANSPORT_ERRORS)
+                if retryable and attempt < max_attempts:
+                    logger.warning(
+                        f"[IMP:8][ExternalApiClient.{log_prefix}][RETRY] "
+                        f"stage={route.stage} attempt={attempt}/{max_attempts} "
+                        f"url={route.request_url} error={exc} [FLOW]"
+                    )
+                    continue
+                logger.critical(
+                    f"[IMP:10][ExternalApiClient.{log_prefix}][TRANSPORT] "
+                    f"stage={route.stage} url={route.request_url} error={exc} [FATAL]"
+                )
+                raise UpstreamApiError(
+                    f"Upstream transport failure for {route.request_url}: {exc}"
+                ) from exc
+        if last_error is not None:
+            raise UpstreamApiError(
+                f"Upstream transport failure for {route.request_url}: {last_error}"
+            ) from last_error
+        raise UpstreamApiError(f"Upstream transport failure for {route.request_url}")
+
     def chat_completions(
         self,
         route: StageRoute,
@@ -102,21 +148,11 @@ class ExternalApiClient:
             payload=payload,
             call_kind="chat_completions",
         )
-        try:
-            response = self._client.post(
-                route.request_url,
-                headers=self._build_headers(route),
-                json=payload,
-            )
-        except httpx.RequestError as exc:
-            # BUG_FIX_CONTEXT: SSL UNEXPECTED_EOF / ConnectError previously bubbled as ASGI 500; map to UpstreamApiError → 502.
-            logger.critical(
-                f"[IMP:10][ExternalApiClient.chat_completions][TRANSPORT] "
-                f"stage={route.stage} url={route.request_url} error={exc} [FATAL]"
-            )
-            raise UpstreamApiError(
-                f"Upstream transport failure for {route.request_url}: {exc}"
-            ) from exc
+        response = self._post_json_with_retry(
+            route,
+            payload=payload,
+            log_prefix="chat_completions",
+        )
         if response.status_code >= 400:
             logger.critical(
                 f"[IMP:10][ExternalApiClient.chat_completions][HTTP_ERROR] "
@@ -184,20 +220,11 @@ class ExternalApiClient:
             payload=body,
             call_kind="openai_proxy",
         )
-        try:
-            response = self._client.post(
-                route.request_url,
-                headers=self._build_headers(route),
-                json=body,
-            )
-        except httpx.RequestError as exc:
-            logger.critical(
-                f"[IMP:10][ExternalApiClient.proxy_chat_completions][TRANSPORT] "
-                f"url={route.request_url} error={exc} [FATAL]"
-            )
-            raise UpstreamApiError(
-                f"Upstream transport failure for {route.request_url}: {exc}"
-            ) from exc
+        response = self._post_json_with_retry(
+            route,
+            payload=body,
+            log_prefix="proxy_chat_completions",
+        )
         if response.status_code >= 400:
             logger.critical(
                 f"[IMP:10][ExternalApiClient.proxy_chat_completions][HTTP_ERROR] "

@@ -4,6 +4,7 @@ def _module_contract():
 # endregion MODULE_CONTRACT
 
 import json
+import logging
 
 from doclingllm.gateway.parsers import get_parser
 from doclingllm.gateway.parsers.base import extract_json_from_text
@@ -29,6 +30,38 @@ def test_parse_layout_boxes_json_list():
     payload = json.dumps([{"label": "title", "bbox": [0, 0, 10, 10]}])
     result = parse_layout_boxes_json(payload)
     assert len(result["boxes"]) == 1
+
+
+def test_extract_json_repair_trailing_quote_after_fence():
+    text = (
+        "```json\n"
+        '{"boxes":[{"label":"text","bbox":[146,34,542,48],"score":0.95}]}'
+        '"\n```'
+    )
+    parsed = extract_json_from_text(text)
+    assert len(parsed["boxes"]) == 1
+    assert parsed["boxes"][0]["label"] == "text"
+
+
+def test_parse_layout_boxes_json_repair_trailing_quote():
+    text = (
+        "```json\n"
+        '{"boxes":[{"label":"list_item","bbox":[180,140,932,158],"score":0.92}]}'
+        '"\n```'
+    )
+    result = parse_layout_boxes_json(text)
+    assert len(result["boxes"]) == 1
+    assert result["boxes"][0]["label"] == "list_item"
+
+
+def test_parse_layout_boxes_json_logs_parse_empty(caplog):
+    caplog.set_level(logging.WARNING)
+    result = parse_layout_boxes_json("```json\n{not valid json at all}\n```")
+    assert result["boxes"] == []
+    assert any(
+        "[IMP:9][parse_layout_boxes_json][PARSE_EMPTY]" in record.message
+        for record in caplog.records
+    )
 
 
 def test_parse_table_structure_json():

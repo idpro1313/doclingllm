@@ -14,7 +14,7 @@
 ## Q: Why pydantic-settings instead of raw os.environ?
 ## A: Typed validation catches misconfiguration at startup before docling-serve receives bad routes.
 ## @changes
-## LAST_CHANGE: [v0.2.0 Slice S1 – initial GatewaySettings and loader.]
+## LAST_CHANGE: [v0.3.1 – GATEWAY_UPSTREAM_RETRIES for transport retry on timeout.]
 ## @modulemap
 ## FUNC 10[Load validated settings from env] => load_gateway_settings
 ## CLASS 9[Gateway configuration model] => GatewaySettings
@@ -69,6 +69,7 @@ class GatewaySettings(BaseSettings):
     gateway_host: str = Field(default="0.0.0.0", alias="GATEWAY_HOST")
     gateway_port: int = Field(default=8080, alias="GATEWAY_PORT")
     gateway_request_timeout: float = Field(default=300.0, alias="GATEWAY_REQUEST_TIMEOUT")
+    gateway_upstream_retries: int = Field(default=1, alias="GATEWAY_UPSTREAM_RETRIES")
     gateway_log_level: str = Field(default="INFO", alias="GATEWAY_LOG_LEVEL")
 
     gateway_models_config_path: Path = Field(

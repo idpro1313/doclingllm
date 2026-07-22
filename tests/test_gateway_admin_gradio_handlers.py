@@ -9,7 +9,12 @@ import httpx
 
 from doclingllm.gateway.admin.config_store import ensure_runtime_config_seeded
 from doclingllm.gateway.admin.connection_tester import run_all_connection_tests
-from doclingllm.gateway.admin.gradio_handlers import handle_save_config, handle_test_connection
+from doclingllm.gateway.admin.gradio_handlers import (
+    handle_save_config,
+    handle_test_connection,
+    parse_stage_inputs_from_form_tail,
+    sync_stage_models_from_backends,
+)
 
 pytest_plugins = ["tests.conftest_admin"]
 
@@ -45,3 +50,34 @@ def test_save_after_successful_test(admin_config_paths, admin_settings):
     result = handle_save_config(runtime, last_test_ok=True, paths=admin_config_paths)
     assert result.ok is True
     assert admin_config_paths.docling_serve_output.is_file()
+
+
+def test_gradio_stage_form_tail_order_matches_common_inputs():
+    stage_names = ["ocr", "layout", "code_formula"]
+    tail = ["vision", "vision", "text", "kimi-k2-6", "kimi-k2-6", "minimax-m2.7"]
+    stage_models, stage_endpoints = parse_stage_inputs_from_form_tail(stage_names, tail)
+    assert stage_endpoints == {
+        "ocr": "vision",
+        "layout": "vision",
+        "code_formula": "text",
+    }
+    assert stage_models == {
+        "ocr": "kimi-k2-6",
+        "layout": "kimi-k2-6",
+        "code_formula": "minimax-m2.7",
+    }
+
+
+def test_sync_stage_models_from_backends():
+    stage_names = ["code_formula", "layout", "ocr"]
+    synced = sync_stage_models_from_backends(
+        stage_names,
+        vision_model="kimi-k2-6",
+        text_model="minimax-m2.7",
+        stage_endpoints={
+            "code_formula": "text",
+            "layout": "vision",
+            "ocr": "vision",
+        },
+    )
+    assert synced == ["minimax-m2.7", "kimi-k2-6", "kimi-k2-6"]

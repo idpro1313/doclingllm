@@ -70,6 +70,45 @@ def runtime_to_form(runtime: GatewayRuntimeConfig) -> dict[str, Any]:
     }
 
 
+def split_stage_form_values(
+    stage_names: list[str],
+    stage_endpoint_values: list[str],
+    stage_model_values: list[str],
+) -> tuple[dict[str, str], dict[str, str]]:
+    """Map parallel Gradio stage inputs to dicts (endpoints before models in form)."""
+    stage_models = dict(zip(stage_names, stage_model_values, strict=True))
+    stage_endpoints = dict(zip(stage_names, stage_endpoint_values, strict=True))
+    return stage_models, stage_endpoints
+
+
+def parse_stage_inputs_from_form_tail(
+    stage_names: list[str],
+    tail: list[Any],
+) -> tuple[dict[str, str], dict[str, str]]:
+    """Parse flat form tail: [*endpoint_dropdowns, *model_textboxes]."""
+    count = len(stage_names)
+    stage_endpoint_values = tail[:count]
+    stage_model_values = tail[count : 2 * count]
+    return split_stage_form_values(stage_names, stage_endpoint_values, stage_model_values)
+
+
+def sync_stage_models_from_backends(
+    stage_names: list[str],
+    vision_model: str,
+    text_model: str,
+    stage_endpoints: dict[str, str],
+) -> list[str]:
+    """Return model names per stage row (same order as stage_names)."""
+    models: list[str] = []
+    for stage in stage_names:
+        endpoint = stage_endpoints.get(
+            stage,
+            "text" if stage == "code_formula" else "vision",
+        )
+        models.append(text_model if endpoint == "text" else vision_model)
+    return models
+
+
 def form_to_runtime(
     vision_base_url: str,
     vision_api_key: str,

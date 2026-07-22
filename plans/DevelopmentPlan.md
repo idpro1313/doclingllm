@@ -136,7 +136,7 @@ $START_DEV_PLAN
   </src_doclingllm_gateway_config_py>
 
   <deploy_gateway_Dockerfile FILE="deploy/gateway/Dockerfile" TYPE="CONTAINER_BUILD">
-    <annotation>Python 3.12 slim; pip install src/doclingllm; CMD uvicorn gateway.app.</annotation>
+    <annotation>Python 3.13 slim; pip install src/doclingllm; CMD uvicorn gateway.app.</annotation>
     <CrossLinks>
       <Link TARGET="src_doclingllm_gateway_app_py" TYPE="BUILDS_IMAGE_FOR" />
     </CrossLinks>
@@ -337,12 +337,15 @@ custom_vlm_presets:
 **Зависимости Python (gateway):**
 
 ```text
-fastapi>=0.115.0      # ASGI gateway, KServe + proxy routes
-uvicorn>=0.32.0       # Production server in container
-httpx>=0.28.0         # Async HTTP to external custom API
-pydantic-settings>=2  # Typed config from env
-numpy>=2.0.0          # Tensor encode/decode for KServe payloads
-pyyaml>=6.0           # gateway-models.yaml loading
+fastapi>=0.139.2      # ASGI gateway, KServe + proxy routes
+uvicorn>=0.51.0       # Production server in container
+httpx>=0.28.1         # Async HTTP to external custom API
+pydantic-settings>=2.14.2  # Typed config from env
+numpy>=2.5.1          # Tensor encode/decode for KServe payloads
+pyyaml>=6.0.3         # gateway-models.yaml loading
+pillow>=12.3.0        # KServe UINT8 tensor to PNG
+gradio>=6.20.0,<7.0   # Admin UI /admin
+pytest>=9.1.1         # dev tests
 ```
 
 ---
