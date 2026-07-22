@@ -18,6 +18,7 @@ from typing import Any, Optional
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
 
+from doclingllm.gateway.admin.reload import build_gateway_state, reload_gateway_state
 from doclingllm.gateway.client import ExternalApiClient, UpstreamApiError
 from doclingllm.gateway.config import GatewaySettings, load_gateway_settings
 from doclingllm.gateway.kserve import (
@@ -35,7 +36,7 @@ from doclingllm.gateway.request_logging import (
     log_gateway_kserve_response,
     log_gateway_openai_response,
 )
-from doclingllm.gateway.routing import RoutingTable, load_routing_table
+from doclingllm.gateway.routing import RoutingTable
 
 logger = logging.getLogger(__name__)
 
@@ -64,20 +65,24 @@ def create_app(
     settings: Optional[GatewaySettings] = None,
     routing_table: Optional[RoutingTable] = None,
     client: Optional[ExternalApiClient] = None,
+    *,
+    enable_admin_ui: bool = True,
 ) -> FastAPI:
     resolved_settings = settings or load_gateway_settings()
     configure_gateway_logging(resolved_settings.gateway_log_level)
-    resolved_table = routing_table or load_routing_table(
-        resolved_settings.gateway_models_config_path,
-        resolved_settings,
-    )
-    resolved_client = client or ExternalApiClient(resolved_settings)
+    if routing_table is not None and client is not None:
+        resolved_table = routing_table
+        resolved_client = client
+        initial_state = GatewayState(resolved_settings, resolved_table, resolved_client)
+    else:
+        initial_state = build_gateway_state(resolved_settings, client=client)
+        resolved_table = initial_state.routing_table
+        resolved_client = initial_state.client
     owns_client = client is None
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        state = GatewayState(resolved_settings, resolved_table, resolved_client)
-        app.state.gateway = state
+        app.state.gateway = initial_state
         logger.info(
             f"[IMP:9][create_app][STARTUP] Gateway ready on "
             f"{resolved_settings.gateway_host}:{resolved_settings.gateway_port} "
@@ -181,6 +186,16 @@ def create_app(
                 f"[IMP:10][openai_chat_completions][ERROR] {exc} [FATAL]"
             )
             raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    @app.post("/admin/reload")
+    async def admin_reload() -> dict[str, str]:
+        reload_gateway_state(app)
+        return {"status": "ok", "message": "Gateway configuration reloaded from volume"}
+
+    if enable_admin_ui:
+        from doclingllm.gateway.admin.gradio_ui import mount_admin_ui
+
+        mount_admin_ui(app)
 
     return app
 

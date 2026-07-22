@@ -74,10 +74,25 @@ python -m pytest tests/ -s -v
 | `test_gateway_app.py` | `[IMP:9][create_app][STARTUP]`; ConnectError → 502 |
 | `test_gateway_kserve.py` | OCR boxes shape `(N,4,2)` без batch axis |
 | `test_gradio_vlm_preset_patch.py` | Dockerfile VLM patch markers |
+| `test_gateway_admin_*.py` | Runtime volume seed, routing merge, connection test, save gate, reload |
 
 $END_BODY
 
 $END_SECTION_PYTEST
+
+---
+
+$START_SECTION_ADMIN
+## Gateway Admin UI (v0.3)
+
+$START_BODY
+
+Headless tests: `tests/test_gateway_admin_*.py`  
+Manual: http://localhost:8080/admin — Test connection → Save → `docker compose restart docling-serve`
+
+$END_BODY
+
+$END_SECTION_ADMIN
 
 ---
 
@@ -143,6 +158,8 @@ $START_BODY
 - [ ] `docling-serve/**` без изменений в git diff
 - [ ] `scripts/healthcheck.sh` exit 0 на сервере
 - [ ] Vlm pipeline не ищет local `granite-docling-258M` (middleware/Gradio inject)
+- [ ] `tests/test_gateway_admin_*.py` PASS
+- [ ] Admin Save пишет только в volume `doclingllm-config`, не в git tree
 
 $END_BODY
 

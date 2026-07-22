@@ -8,20 +8,22 @@ from pathlib import Path
 import yaml
 
 
-def test_docker_compose_declares_remote_services():
+def test_docker_compose_uses_named_config_volume():
     repo_root = Path(__file__).resolve().parents[1]
     compose_path = repo_root / "deploy" / "docker-compose.yml"
     text = compose_path.read_text(encoding="utf-8")
+    assert "doclingllm-config:" in text
+    assert "8080:8080" in text
+    assert "/data/doclingllm/config" in text
+    assert "DOCLING_SERVE_CONFIG_FILE: /data/doclingllm/config/docling-serve.yaml" in text
+    assert "GATEWAY_MODELS_TEMPLATE" in text
     assert "DOCLING_SERVE_ENABLE_REMOTE_SERVICES" in text
-    assert "DOCLING_SERVE_LOAD_MODELS_AT_BOOT" in text
     assert 'DOCLING_SERVE_LOAD_MODELS_AT_BOOT: "false"' in text
-    assert 'DOCLING_SERVE_ENABLE_UI: "true"' in text
     assert "model-gateway" in text
     assert "docling-serve" in text
-    assert "HTTPS_PROXY" in text
 
 
-def test_docling_serve_yaml_points_to_gateway():
+def test_docling_serve_yaml_reference_points_to_gateway():
     repo_root = Path(__file__).resolve().parents[1]
     config_path = repo_root / "deploy" / "config" / "docling-serve.yaml"
     data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
@@ -100,10 +102,19 @@ def test_redeploy_sh_pull_stop_start():
     assert "start.sh" in text
 
 
-def test_gateway_models_yaml_has_all_stages():
+def test_gateway_models_template_has_all_stages():
     repo_root = Path(__file__).resolve().parents[1]
-    config_path = repo_root / "deploy" / "config" / "gateway-models.yaml"
+    config_path = repo_root / "deploy" / "config" / "gateway-models.template.yaml"
     data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     stages = data["stages"]
     for stage in ("ocr", "layout", "table", "vlm", "code_formula"):
         assert stage in stages
+
+
+def test_gateway_runtime_defaults_has_backends():
+    repo_root = Path(__file__).resolve().parents[1]
+    path = repo_root / "deploy" / "config" / "gateway-runtime.defaults.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    assert "vision" in data["backends"]
+    assert "text" in data["backends"]
+    assert data["backends"]["vision"]["api_key"] == ""

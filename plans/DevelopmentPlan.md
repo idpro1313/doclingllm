@@ -420,6 +420,6 @@ pyyaml>=6.0           # gateway-models.yaml loading
 
 **Полный план:** [`plans/GatewayAdminUI.md`](GatewayAdminUI.md) — Draft Code Graph, data flow, slices **G1–G7**, acceptance AC-G1…G9.
 
-**Статус:** ожидает утверждения оператора → mode-code G1.
+**Статус:** реализовано v0.3.0 (slices G1–G7).
 
 $END_DEV_PLAN

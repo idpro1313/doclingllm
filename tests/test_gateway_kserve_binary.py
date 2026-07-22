@@ -109,7 +109,7 @@ def test_kserve_infer_endpoint_binary_layout(gateway_settings, full_routing_yaml
 
     transport = httpx.MockTransport(handler)
     client = ExternalApiClient(gateway_settings, client=httpx.Client(transport=transport))
-    app = create_app(settings=gateway_settings, routing_table=table, client=client)
+    app = create_app(settings=gateway_settings, routing_table=table, client=client, enable_admin_ui=False)
 
     pixel_values = np.zeros((1, 3, 8, 8), dtype=np.float32)
     orig_target_sizes = np.array([[8, 8]], dtype=np.int64)

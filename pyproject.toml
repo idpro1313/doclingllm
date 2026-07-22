@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "doclingllm"
-version = "0.2.25"
+version = "0.3.0"
 description = "Model Gateway wrapper for docling-serve remote API inference"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -16,6 +16,7 @@ dependencies = [
     "numpy>=2.0.0",           # KServe tensor encode/decode (Slice S4)
     "pyyaml>=6.0",            # gateway-models.yaml declarative routing
     "pillow>=10.0",           # KServe UINT8 tensor to PNG conversion
+    "gradio>=5.0,<6.0",       # Admin UI mounted at /admin on gateway (Gateway Admin v0.3)
 ]
 
 [project.scripts]

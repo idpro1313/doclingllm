@@ -1,0 +1,22 @@
+# Gateway runtime defaults (committed). Secrets filled from deploy/.env on first seed.
+version: "1"
+backends:
+  vision:
+    base_url: "https://ai-billing.develonica.group/v1"
+    api_key: ""
+    model: "qwen3.6-35b-a3b"
+  text:
+    base_url: "http://192.168.101.15:8111/v1"
+    api_key: ""
+    model: "minimax-m2.7"
+gateway:
+  request_timeout: 300
+  log_level: INFO
+proxy:
+  http_proxy: ""
+  https_proxy: ""
+  no_proxy: "localhost,127.0.0.1,model-gateway,docling-serve"
+stages: {}
+meta:
+  last_test_at: null
+  last_test_ok: false

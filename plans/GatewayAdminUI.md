@@ -314,6 +314,6 @@ Deliver: code + tests PASS
 
 **Порядок:** G1 → G2 → G3 → G4 → G5 → G6 → G7.
 
-**Не начинать mode-code** до явного «утверждаю план» оператора (этот документ).
+**Статус:** реализовано v0.3.0 — см. `src/doclingllm/gateway/admin/`, `deploy/docker-compose.yml` volume `doclingllm-config`.
 
 $END_DEV_PLAN

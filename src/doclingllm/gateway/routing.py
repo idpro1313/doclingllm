@@ -180,12 +180,29 @@ def load_routing_table(
         raise FileNotFoundError(f"Routing config not found: {config_path}")
 
     raw_text = config_path.read_text(encoding="utf-8")
-    env_map = settings.env_substitution_map()
     parsed = yaml.safe_load(raw_text)
     if not isinstance(parsed, dict):
         raise ValueError(f"Routing config must be a YAML mapping, got {type(parsed).__name__}")
-
+    env_map = settings.env_substitution_map()
     substituted = substitute_in_object(parsed, env_map)
+    return load_routing_table_from_dict(
+        substituted,
+        settings,
+        source_path=config_path,
+    )
+
+
+# endregion FUNC_load_routing_table
+
+
+# region FUNC_load_routing_table_from_dict [DOMAIN(9): Routing; CONCEPT(9): YAMLLoad; TECH(9): PyYAML]
+## @purpose Parse already-substituted routing mapping into RoutingTable (admin merge + tests).
+## @complexity 5
+def load_routing_table_from_dict(
+    substituted: dict[str, Any],
+    settings: GatewaySettings,
+    source_path: Optional[Path] = None,
+) -> RoutingTable:
     endpoints_raw = substituted.get("endpoints", {})
     stages_raw = substituted.get("stages", {})
 
@@ -204,19 +221,20 @@ def load_routing_table(
     table = RoutingTable(
         endpoints=endpoints,
         stages=stages,
-        source_path=config_path,
+        source_path=source_path,
     )
     logger.info(
-        f"[IMP:7][load_routing_table][LOAD] "
-        f"path={config_path} endpoints={len(endpoints)} stages={len(stages)} [CONFIG]"
+        f"[IMP:7][load_routing_table_from_dict][LOAD] "
+        f"endpoints={len(endpoints)} stages={len(stages)} [CONFIG]"
     )
     logger.info(
-        f"[IMP:9][load_routing_table][READY] Routing table loaded for stages: {sorted(stages.keys())} [OK]"
+        f"[IMP:9][load_routing_table_from_dict][READY] "
+        f"Routing table loaded for stages: {sorted(stages.keys())} [OK]"
     )
     return table
 
 
-# endregion FUNC_load_routing_table
+# endregion FUNC_load_routing_table_from_dict
 
 
 # region FUNC_resolve_stage_route [DOMAIN(9): Routing; CONCEPT(9): Resolver; TECH(8): pydantic]

@@ -4,15 +4,22 @@ services:
       context: ..
       dockerfile: deploy/gateway/Dockerfile
     container_name: doclingllm-gateway
+    ports:
+      - "8080:8080"
     env_file:
       - .env
     environment:
-      # Optional corporate proxy for vision HTTPS (set in deploy/.env)
+      DOCLINGLLM_CONFIG_DIR: /data/doclingllm/config
+      GATEWAY_RUNTIME_CONFIG: /data/doclingllm/config/gateway-runtime.yaml
+      GATEWAY_MODELS_TEMPLATE: /config/templates/gateway-models.template.yaml
+      GATEWAY_RUNTIME_DEFAULTS: /config/templates/gateway-runtime.defaults.yaml
       HTTP_PROXY: ${HTTP_PROXY:-}
       HTTPS_PROXY: ${HTTPS_PROXY:-}
       NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,model-gateway,docling-serve}
     volumes:
-      - ./config/gateway-models.yaml:/config/gateway-models.yaml:ro
+      - doclingllm-config:/data/doclingllm/config
+      - ./config/gateway-models.template.yaml:/config/templates/gateway-models.template.yaml:ro
+      - ./config/gateway-runtime.defaults.yaml:/config/templates/gateway-runtime.defaults.yaml:ro
     networks:
       - doclingllm-net
     healthcheck:
@@ -35,7 +42,7 @@ services:
     env_file:
       - .env
     environment:
-      DOCLING_SERVE_CONFIG_FILE: /config/docling-serve.yaml
+      DOCLING_SERVE_CONFIG_FILE: /data/doclingllm/config/docling-serve.yaml
       DOCLING_SERVE_ENABLE_REMOTE_SERVICES: "true"
       DOCLING_SERVE_ENABLE_UI: "true"
       DOCLING_SERVE_LOAD_MODELS_AT_BOOT: "false"
@@ -44,7 +51,7 @@ services:
       UVICORN_HOST: 0.0.0.0
       UVICORN_PORT: 5001
     volumes:
-      - ./config/docling-serve.yaml:/config/docling-serve.yaml:ro
+      - doclingllm-config:/data/doclingllm/config:ro
     ports:
       - "5001:5001"
     networks:
@@ -54,3 +61,7 @@ services:
 networks:
   doclingllm-net:
     driver: bridge
+
+volumes:
+  doclingllm-config:
+    name: doclingllm-config

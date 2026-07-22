@@ -88,4 +88,6 @@ sleep 5
 echo "[doclingllm] Stack is up."
 echo "  docling-serve API: http://localhost:5001"
 echo "  docling UI:        http://localhost:5001/ui"
-echo "  gateway (internal): http://model-gateway:8080"
+echo "  gateway admin UI:  http://localhost:8080/admin"
+echo "  gateway API:       http://localhost:8080"
+echo "  config volume:     doclingllm-config (/data/doclingllm/config)"

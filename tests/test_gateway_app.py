@@ -23,7 +23,7 @@ def test_kserve_infer_upstream_connect_error_returns_502(
 
     transport = httpx.MockTransport(handler)
     client = ExternalApiClient(gateway_settings, client=httpx.Client(transport=transport))
-    app = create_app(settings=gateway_settings, routing_table=table, client=client)
+    app = create_app(settings=gateway_settings, routing_table=table, client=client, enable_admin_ui=False)
 
     with TestClient(app, raise_server_exceptions=False) as test_client:
         response = test_client.post("/v2/models/ocr/infer", json=kserve_ocr_request)
@@ -41,7 +41,7 @@ def test_health_endpoint(gateway_settings, full_routing_yaml):
 
     transport = httpx.MockTransport(handler)
     client = ExternalApiClient(gateway_settings, client=httpx.Client(transport=transport))
-    app = create_app(settings=gateway_settings, routing_table=table, client=client)
+    app = create_app(settings=gateway_settings, routing_table=table, client=client, enable_admin_ui=False)
 
     with TestClient(app) as test_client:
         response = test_client.get("/health")
@@ -57,7 +57,7 @@ def test_kserve_model_metadata_endpoint(gateway_settings, full_routing_yaml):
         lambda request: httpx.Response(200, json={"choices": [{"message": {"content": "{}"}}]})
     )
     client = ExternalApiClient(gateway_settings, client=httpx.Client(transport=transport))
-    app = create_app(settings=gateway_settings, routing_table=table, client=client)
+    app = create_app(settings=gateway_settings, routing_table=table, client=client, enable_admin_ui=False)
 
     with TestClient(app) as test_client:
         response = test_client.get("/v2/models/layout")
@@ -93,7 +93,7 @@ def test_kserve_infer_endpoint(gateway_settings, full_routing_yaml, kserve_ocr_r
 
     transport = httpx.MockTransport(handler)
     client = ExternalApiClient(gateway_settings, client=httpx.Client(transport=transport))
-    app = create_app(settings=gateway_settings, routing_table=table, client=client)
+    app = create_app(settings=gateway_settings, routing_table=table, client=client, enable_admin_ui=False)
 
     with TestClient(app) as test_client:
         response = test_client.post("/v2/models/ocr/infer", json=kserve_ocr_request)

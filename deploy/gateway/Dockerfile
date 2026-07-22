@@ -11,9 +11,13 @@ COPY src ./src
 
 RUN pip install --no-cache-dir -e .
 
-COPY deploy/config/gateway-models.yaml /config/gateway-models.yaml
+COPY deploy/config/gateway-models.template.yaml /config/templates/gateway-models.template.yaml
+COPY deploy/config/gateway-runtime.defaults.yaml /config/templates/gateway-runtime.defaults.yaml
 
-ENV GATEWAY_MODELS_CONFIG_PATH=/config/gateway-models.yaml
+ENV DOCLINGLLM_CONFIG_DIR=/data/doclingllm/config
+ENV GATEWAY_RUNTIME_CONFIG=/data/doclingllm/config/gateway-runtime.yaml
+ENV GATEWAY_MODELS_TEMPLATE=/config/templates/gateway-models.template.yaml
+ENV GATEWAY_RUNTIME_DEFAULTS=/config/templates/gateway-runtime.defaults.yaml
 ENV GATEWAY_HOST=0.0.0.0
 ENV GATEWAY_PORT=8080
 

@@ -1,0 +1,64 @@
+# Маршрутизация стадий docling → внешние OpenAI-compatible API
+# Секреты (VISION_API_KEY) — только из env, подставляются gateway при старте.
+
+endpoints:
+  vision:
+    base_url: "${VISION_API_BASE_URL}"
+    api_key_env: VISION_API_KEY
+    default_model: "${VISION_MODEL}"
+  text:
+    base_url: "${TEXT_API_BASE_URL}"
+    api_key_env: TEXT_API_KEY
+    default_model: "${TEXT_MODEL}"
+
+stages:
+  # KServe-адаптер: image → chat/completions → parse → KServe tensors
+  ocr:
+    endpoint: vision
+    mode: openai_vision
+    model: "${VISION_MODEL}"
+    path: /chat/completions
+    response_parser: deepseek_ocr_json
+    system_prompt: "OCR this document page. Return ONLY JSON {\"text_regions\":[{\"text\":\"...\",\"bbox\":[x1,y1,x2,y2],\"score\":0.0-1.0}]}. bbox MUST be flat pixel xyxy with x1<x2 and y1<y2. Do not return markdown prose."
+
+  layout:
+    endpoint: vision
+    mode: openai_vision
+    model: "${VISION_MODEL}"
+    path: /chat/completions
+    response_parser: layout_boxes_json
+    system_prompt: "Detect document layout regions. Return JSON {\"boxes\":[{\"label\":\"title|text|section_header|list_item|table|picture|caption\",\"bbox\":[x1,y1,x2,y2],\"score\":0.0-1.0}]}. bbox MUST be flat pixel xyxy with x1<x2 and y1<y2 (not nested points)."
+
+  table:
+    endpoint: vision
+    mode: openai_vision
+    model: "${VISION_MODEL}"
+    path: /chat/completions
+    response_parser: table_structure_json
+    system_prompt: "Extract table cell grid from image. Return JSON with rows/cols/cells."
+
+  picture_classification:
+    endpoint: vision
+    mode: openai_vision
+    model: "${VISION_MODEL}"
+    path: /chat/completions
+    response_parser: classification_json
+
+  picture_description:
+    endpoint: vision
+    mode: openai_vision
+    model: "${VISION_MODEL}"
+    path: /chat/completions
+
+  vlm:
+    endpoint: vision
+    mode: openai_proxy
+    model: "${VISION_MODEL}"
+    path: /chat/completions
+
+  code_formula:
+    endpoint: text
+    mode: openai_text
+    model: minimax-m2.7
+    path: /chat/completions
+    system_prompt: "Transcribe code or formula from the provided context."
