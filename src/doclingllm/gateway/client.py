@@ -10,7 +10,7 @@
 ## - Authorization header is NEVER logged.
 ## - chat_completions raises httpx.HTTPStatusError on 4xx/5xx after logging IMP:10.
 ## @changes
-## LAST_CHANGE: [v0.3.1 – Retry on ReadTimeout/ConnectTimeout; trust_env proxy via httpx.]
+## LAST_CHANGE: [v0.3.7 – Stage request_params merge; IMP:8 usage/reasoning_tokens metrics log.]
 ## @modulemap
 ## CLASS 10[Outbound HTTP client] => ExternalApiClient
 ## CLASS 8[Upstream transport/HTTP failure] => UpstreamApiError
@@ -123,6 +123,47 @@ class ExternalApiClient:
             ) from last_error
         raise UpstreamApiError(f"Upstream transport failure for {route.request_url}")
 
+    def _merge_chat_payload(
+        self,
+        route: StageRoute,
+        messages: list[dict[str, Any]],
+        extra_params: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "model": route.model,
+            "messages": messages,
+        }
+        if route.request_params:
+            payload.update(route.request_params)
+        if extra_params:
+            payload.update(extra_params)
+        return payload
+
+    def _log_token_usage(self, route: StageRoute, response_data: dict[str, Any]) -> None:
+        usage = response_data.get("usage")
+        if not isinstance(usage, dict):
+            return
+        prompt_tokens = usage.get("prompt_tokens")
+        completion_tokens = usage.get("completion_tokens")
+        total_tokens = usage.get("total_tokens")
+        reasoning_tokens: int | None = None
+        details = usage.get("completion_tokens_details")
+        if isinstance(details, dict):
+            raw_reasoning = details.get("reasoning_tokens")
+            if isinstance(raw_reasoning, int):
+                reasoning_tokens = raw_reasoning
+        metric_parts = [
+            f"prompt={prompt_tokens}",
+            f"completion={completion_tokens}",
+            f"total={total_tokens}",
+        ]
+        if reasoning_tokens is not None:
+            metric_parts.append(f"reasoning={reasoning_tokens}")
+        logger.info(
+            f"[IMP:8][ExternalApiClient.chat_completions][USAGE] "
+            f"stage={route.stage} model={route.model} {' '.join(metric_parts)} [METRICS]"
+        )
+
     def chat_completions(
         self,
         route: StageRoute,
@@ -130,12 +171,7 @@ class ExternalApiClient:
         extra_params: Optional[dict[str, Any]] = None,
     ) -> dict[str, Any]:
         """POST OpenAI-compatible chat/completions to resolved route URL."""
-        payload: dict[str, Any] = {
-            "model": route.model,
-            "messages": messages,
-        }
-        if extra_params:
-            payload.update(extra_params)
+        payload = self._merge_chat_payload(route, messages, extra_params)
 
         logger.info(
             f"[IMP:7][ExternalApiClient.chat_completions][REQUEST] "
@@ -161,6 +197,7 @@ class ExternalApiClient:
             response.raise_for_status()
 
         data = response.json()
+        self._log_token_usage(route, data)
         log_model_inbound_response(
             logger,
             stage=route.stage,
@@ -232,6 +269,7 @@ class ExternalApiClient:
             )
             response.raise_for_status()
         data = response.json()
+        self._log_token_usage(route, data)
         log_model_inbound_response(
             logger,
             stage=route.stage,

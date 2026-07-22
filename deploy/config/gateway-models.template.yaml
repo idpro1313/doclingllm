@@ -20,6 +20,9 @@ stages:
     path: /chat/completions
     response_parser: deepseek_ocr_json
     system_prompt: "OCR this document page. Return ONLY JSON {\"text_regions\":[{\"text\":\"...\",\"bbox\":[x1,y1,x2,y2],\"score\":0.0-1.0}]}. bbox MUST be flat pixel xyxy with x1<x2 and y1<y2. Do not return markdown prose."
+    request_params:
+      max_tokens: 512
+      temperature: 0
 
   layout:
     endpoint: vision
@@ -28,6 +31,9 @@ stages:
     path: /chat/completions
     response_parser: layout_boxes_json
     system_prompt: "Detect document layout regions. Return JSON {\"boxes\":[{\"label\":\"title|text|section_header|list_item|table|picture|caption\",\"bbox\":[x1,y1,x2,y2],\"score\":0.0-1.0}]}. bbox MUST be flat pixel xyxy with x1<x2 and y1<y2 (not nested points)."
+    request_params:
+      max_tokens: 512
+      temperature: 0
 
   table:
     endpoint: vision
@@ -36,6 +42,9 @@ stages:
     path: /chat/completions
     response_parser: table_structure_json
     system_prompt: "Extract table cell grid from image. Return JSON with rows/cols/cells."
+    request_params:
+      max_tokens: 1024
+      temperature: 0
 
   picture_classification:
     endpoint: vision
@@ -43,12 +52,18 @@ stages:
     model: "${VISION_MODEL}"
     path: /chat/completions
     response_parser: classification_json
+    request_params:
+      max_tokens: 128
+      temperature: 0
 
   picture_description:
     endpoint: vision
     mode: openai_vision
     model: "${VISION_MODEL}"
     path: /chat/completions
+    request_params:
+      max_tokens: 512
+      temperature: 0
 
   vlm:
     endpoint: vision
@@ -62,3 +77,6 @@ stages:
     model: "${TEXT_MODEL}"
     path: /chat/completions
     system_prompt: "Transcribe code or formula from the provided context."
+    request_params:
+      max_tokens: 512
+      temperature: 0

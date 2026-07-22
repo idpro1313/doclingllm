@@ -99,7 +99,7 @@ def test_load_routing_table(sample_routing_yaml, clear_settings_cache, monkeypat
     assert "vision" in table.endpoints
     assert table.endpoints["vision"].base_url == "https://ai-billing.develonica.group/v1"
     assert "ocr" in table.stages
-    assert len(table.stages) == 3
+    assert len(table.stages) == 4
 
     ocr_route = resolve_stage_route("ocr", table, settings)
     assert ocr_route.mode == "openai_vision"
@@ -107,6 +107,7 @@ def test_load_routing_table(sample_routing_yaml, clear_settings_cache, monkeypat
     assert ocr_route.request_url == "https://ai-billing.develonica.group/v1/chat/completions"
     assert ocr_route.api_key == "secret-vision-token"
     assert ocr_route.response_parser == "deepseek_ocr_json"
+    assert ocr_route.request_params == {"max_tokens": 512, "temperature": 0}
 
     text_route = resolve_stage_route("code_formula", table, settings)
     assert text_route.endpoint_name == "text"

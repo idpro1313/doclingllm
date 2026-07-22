@@ -19,6 +19,7 @@ def test_docker_compose_uses_named_config_volume():
     assert "GATEWAY_MODELS_TEMPLATE" in text
     assert "DOCLING_SERVE_ENABLE_REMOTE_SERVICES" in text
     assert 'DOCLING_SERVE_LOAD_MODELS_AT_BOOT: "false"' in text
+    assert 'DOCLING_SERVE_MAX_SYNC_WAIT: "600"' in text
     assert "model-gateway" in text
     assert "docling-serve" in text
 
@@ -74,6 +75,7 @@ def test_env_defaults_has_required_keys():
         "VISION_API_KEY=",
         "VISION_MODEL=qwen3.6-35b-a3b",
         "DOCLING_SERVE_ENABLE_UI=true",
+        "DOCLING_SERVE_MAX_SYNC_WAIT=600",
         "TEXT_API_BASE_URL",
     ):
         assert key in text
@@ -120,6 +122,8 @@ def test_gateway_models_template_has_all_stages():
     stages = data["stages"]
     for stage in ("ocr", "layout", "table", "vlm", "code_formula"):
         assert stage in stages
+    assert stages["ocr"]["request_params"]["max_tokens"] == 512
+    assert stages["layout"]["request_params"]["temperature"] == 0
 
 
 def test_gateway_runtime_defaults_has_backends():

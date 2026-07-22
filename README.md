@@ -110,6 +110,8 @@ cd doclingllm
 
 Секреты — только в `deploy/.env` (gitignored). Шаблон: `deploy/.env.defaults`.
 
+**Производительность remote VLM:** sync UI/API ждёт до `DOCLING_SERVE_MAX_SYNC_WAIT` секунд (по умолчанию **600**). Gateway ограничивает structured-стадии (`ocr`, `layout`, …) через `max_tokens` в `gateway-models.template.yaml`, чтобы reasoning-модели не тратили минуты на короткий JSON. Для OCR/layout предпочтительна быстрая vision-модель без reasoning (например `qwen3.6-35b-a3b`), не `kimi-k2-6`.
+
 $END_BODY
 
 $END_ARTIFACT_DEPLOY

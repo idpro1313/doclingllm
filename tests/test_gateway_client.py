@@ -42,6 +42,8 @@ def test_external_api_client_vision_call(gateway_settings, caplog):
     def handler(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content.decode())
         assert body["model"] == "qwen3.6-35b-a3b"
+        assert body["max_tokens"] == 512
+        assert body["temperature"] == 0
         assert "Authorization" in request.headers
         return httpx.Response(
             200,
@@ -99,6 +101,36 @@ def test_external_api_client_retries_read_timeout(gateway_settings, caplog):
     assert extract_assistant_content(data) == '{"boxes":[]}'
     assert any(
         "[IMP:8][ExternalApiClient.chat_completions][RETRY]" in record.message
+        for record in caplog.records
+    )
+    client.close()
+
+
+def test_external_api_client_logs_reasoning_tokens(gateway_settings, caplog):
+    caplog.set_level(logging.INFO)
+    table = load_routing_table(gateway_settings.gateway_models_config_path, gateway_settings)
+    route = resolve_stage_route("ocr", table, gateway_settings)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": '{"text_regions":[]}'}}],
+                "usage": {
+                    "prompt_tokens": 100,
+                    "completion_tokens": 400,
+                    "total_tokens": 500,
+                    "completion_tokens_details": {"reasoning_tokens": 350},
+                },
+            },
+        )
+
+    transport = httpx.MockTransport(handler)
+    client = ExternalApiClient(gateway_settings, client=httpx.Client(transport=transport))
+    client.chat_completions(route, [{"role": "user", "content": "ocr?"}])
+    assert any(
+        "[IMP:8][ExternalApiClient.chat_completions][USAGE]" in record.message
+        and "reasoning=350" in record.message
         for record in caplog.records
     )
     client.close()

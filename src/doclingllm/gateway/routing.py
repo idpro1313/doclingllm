@@ -15,7 +15,7 @@
 ## Q: Why separate routing from config.py?
 ## A: L3 Adaptation layer must not depend on pydantic-settings directly; tests inject YAML via tmp_path.
 ## @changes
-## LAST_CHANGE: [v0.2.0 Slice S1 – RoutingTable, YAML loader, stage resolver.]
+## LAST_CHANGE: [v0.3.7 – request_params per stage (max_tokens/temperature) for structured VLM calls.]
 ## @modulemap
 ## FUNC 10[Load YAML routing table] => load_routing_table
 ## FUNC 9[Resolve stage to outbound route] => resolve_stage_route
@@ -87,6 +87,7 @@ class StageConfig(BaseModel):
     path: str = "/chat/completions"
     response_parser: Optional[str] = None
     system_prompt: Optional[str] = None
+    request_params: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("mode")
     @classmethod
@@ -111,6 +112,7 @@ class StageRoute(BaseModel):
     api_key: str = ""
     response_parser: Optional[str] = None
     system_prompt: Optional[str] = None
+    request_params: dict[str, Any] = Field(default_factory=dict)
     endpoint_name: str = ""
 
 
@@ -275,6 +277,7 @@ def resolve_stage_route(
         api_key=api_key,
         response_parser=stage_cfg.response_parser,
         system_prompt=stage_cfg.system_prompt,
+        request_params=dict(stage_cfg.request_params),
         endpoint_name=stage_cfg.endpoint,
     )
     logger.info(

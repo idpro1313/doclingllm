@@ -76,6 +76,18 @@ stages:
     model: "${VISION_MODEL}"
     path: /chat/completions
     response_parser: deepseek_ocr_json
+    request_params:
+      max_tokens: 512
+      temperature: 0
+  layout:
+    endpoint: vision
+    mode: openai_vision
+    model: "${VISION_MODEL}"
+    path: /chat/completions
+    response_parser: layout_boxes_json
+    request_params:
+      max_tokens: 512
+      temperature: 0
   code_formula:
     endpoint: text
     mode: openai_text
