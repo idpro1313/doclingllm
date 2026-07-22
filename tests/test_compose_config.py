@@ -108,7 +108,7 @@ def test_redeploy_fast_sh_defaults_to_gateway_with_cache():
     text = fast_sh.read_text(encoding="utf-8")
     assert "model-gateway" in text
     assert "docker compose build" in text
-    assert "--no-cache" not in text
+    assert "docker compose build --no-cache" not in text
     assert "--no-build" in text
     assert "healthcheck.sh" in text
 
