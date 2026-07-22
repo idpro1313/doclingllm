@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "doclingllm"
-version = "0.3.8"
+version = "0.3.9"
 description = "Model Gateway wrapper for docling-serve remote API inference"
 readme = "README.md"
 requires-python = ">=3.11"

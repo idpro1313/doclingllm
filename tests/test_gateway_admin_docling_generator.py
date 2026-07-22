@@ -30,3 +30,26 @@ def test_write_docling_serve_yaml_to_volume(admin_config_paths, admin_settings):
     path = write_docling_serve_yaml(runtime, admin_config_paths)
     assert path == admin_config_paths.docling_serve_output
     assert path.is_file()
+
+
+def test_docling_generator_kserve_timeouts_follow_gateway_request_timeout(
+    admin_config_paths,
+    admin_settings,
+):
+    runtime = ensure_runtime_config_seeded(admin_config_paths, admin_settings)
+    runtime = runtime.model_copy(
+        update={
+            "gateway": runtime.gateway.model_copy(update={"request_timeout": 600.0}),
+        }
+    )
+    data = yaml.safe_load(render_docling_serve_yaml(runtime).split("\n", 2)[2])
+    assert data["custom_ocr_presets"]["auto"]["timeout"] == 600.0
+    assert (
+        data["custom_layout_presets"]["default"]["engine_options"]["timeout"] == 600.0
+    )
+    assert (
+        data["custom_picture_classification_presets"]["default"]["engine_options"][
+            "timeout"
+        ]
+        == 600.0
+    )

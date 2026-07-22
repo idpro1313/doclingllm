@@ -29,13 +29,14 @@ def build_docling_serve_document(
     gateway_base: str = GATEWAY_BASE,
 ) -> dict[str, Any]:
     text_model = runtime.backends["text"].model
+    stage_timeout = float(runtime.gateway.request_timeout)
     openai_url = f"{gateway_base}/v1/chat/completions"
     remote_vlm = {
         "engine_options": {
             "engine_type": "api",
             "url": openai_url,
             "params": {"model": "remote-vision"},
-            "timeout": float(runtime.gateway.request_timeout),
+            "timeout": stage_timeout,
             "concurrency": 1,
         },
         "model_spec": {
@@ -50,7 +51,7 @@ def build_docling_serve_document(
             "engine_type": "api",
             "url": openai_url,
             "params": {"model": "remote-vision"},
-            "timeout": float(runtime.gateway.request_timeout),
+            "timeout": stage_timeout,
             "concurrency": 1,
         },
         "model_spec": {
@@ -73,14 +74,14 @@ def build_docling_serve_document(
                 "url": gateway_base,
                 "transport": "http",
                 "model_name": "ocr",
-                "timeout": float(runtime.gateway.request_timeout),
+                "timeout": stage_timeout,
             },
             "remote_ocr": {
                 "kind": "kserve_v2_ocr",
                 "url": gateway_base,
                 "transport": "http",
                 "model_name": "ocr",
-                "timeout": float(runtime.gateway.request_timeout),
+                "timeout": stage_timeout,
             },
         },
         "default_layout_kind": "layout_object_detection",
@@ -93,7 +94,7 @@ def build_docling_serve_document(
                     "url": gateway_base,
                     "transport": "http",
                     "model_name": "layout",
-                    "timeout": 180.0,
+                    "timeout": stage_timeout,
                 },
             },
             "remote_layout": {
@@ -103,7 +104,7 @@ def build_docling_serve_document(
                     "url": gateway_base,
                     "transport": "http",
                     "model_name": "layout",
-                    "timeout": 180.0,
+                    "timeout": stage_timeout,
                 },
             },
         },
@@ -116,7 +117,7 @@ def build_docling_serve_document(
                     "url": gateway_base,
                     "transport": "http",
                     "model_name": "picture_classifier",
-                    "timeout": 180.0,
+                    "timeout": stage_timeout,
                 },
                 "model_spec": {
                     "name": "document_figure_classifier_v2_5",
@@ -129,7 +130,7 @@ def build_docling_serve_document(
                     "url": gateway_base,
                     "transport": "http",
                     "model_name": "picture_classifier",
-                    "timeout": 180.0,
+                    "timeout": stage_timeout,
                 },
                 "model_spec": {
                     "name": "document_figure_classifier_v2_5",
