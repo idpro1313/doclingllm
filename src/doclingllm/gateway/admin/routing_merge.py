@@ -56,13 +56,11 @@ def apply_stage_overrides(
     return substituted
 
 
-def load_merged_routing_table(
+def build_merged_routing_dict(
     runtime: GatewayRuntimeConfig,
     paths: Optional[ConfigPaths] = None,
-    settings: Optional[GatewaySettings] = None,
-) -> RoutingTable:
+) -> dict[str, Any]:
     resolved_paths = paths or resolve_config_paths()
-    resolved_settings = settings or runtime_to_settings(runtime)
     if not resolved_paths.models_template.is_file():
         raise FileNotFoundError(
             f"Models template not found: {resolved_paths.models_template}"
@@ -74,7 +72,17 @@ def load_merged_routing_table(
         raise ValueError("gateway-models.template.yaml must be a mapping")
     env_map = build_env_map_from_runtime(runtime)
     substituted = substitute_in_object(template, env_map)
-    substituted = apply_stage_overrides(substituted, runtime)
+    return apply_stage_overrides(substituted, runtime)
+
+
+def load_merged_routing_table(
+    runtime: GatewayRuntimeConfig,
+    paths: Optional[ConfigPaths] = None,
+    settings: Optional[GatewaySettings] = None,
+) -> RoutingTable:
+    resolved_paths = paths or resolve_config_paths()
+    resolved_settings = settings or runtime_to_settings(runtime)
+    substituted = build_merged_routing_dict(runtime, resolved_paths)
     table = load_routing_table_from_dict(
         substituted,
         resolved_settings,

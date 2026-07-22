@@ -105,7 +105,7 @@ cd doclingllm
 |-----|------------|
 | http://localhost:5001/docs | OpenAPI docling-serve |
 | http://localhost:5001/ui | Gradio demo |
-| http://localhost:8080/admin | Gateway Admin UI (Gradio) |
+| http://localhost:8080/admin | Gateway Admin UI (Gradio): настройки + вкладка **Configs** (просмотр/копирование YAML) |
 | http://localhost:5001/v1/convert/* | API конвертации |
 
 Секреты — только в `deploy/.env` (gitignored). Шаблон: `deploy/.env.defaults`.

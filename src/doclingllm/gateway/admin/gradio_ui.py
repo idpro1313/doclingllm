@@ -14,6 +14,7 @@ from pydantic import ValidationError
 
 from doclingllm.gateway.admin.gradio_handlers import (
     form_to_runtime,
+    handle_refresh_config_export,
     handle_save_config,
     handle_test_connection,
     load_admin_runtime,
@@ -101,6 +102,44 @@ def build_admin_blocks(app: Any) -> gr.Blocks:
             status_message = gr.Markdown("")
             test_btn = gr.Button("Test connection", variant="secondary")
             save_btn = gr.Button("Save", variant="primary")
+
+        export = handle_refresh_config_export()
+        with gr.Tab("Configs"):
+            gr.Markdown(
+                "Текущие конфиги с volume и bind-mount template. "
+                "Выделите текст в поле (Ctrl+A) и скопируйте (Ctrl+C)."
+            )
+            config_paths_info = gr.Code(
+                label="Пути и docker cp",
+                value=export[0],
+                language="markdown",
+                lines=10,
+            )
+            refresh_configs_btn = gr.Button("Обновить", variant="secondary")
+            runtime_yaml_view = gr.Code(
+                label="gateway-runtime.yaml (volume)",
+                value=export[1],
+                language="yaml",
+                lines=20,
+            )
+            docling_yaml_view = gr.Code(
+                label="docling-serve.yaml (volume)",
+                value=export[2],
+                language="yaml",
+                lines=20,
+            )
+            template_yaml_view = gr.Code(
+                label="gateway-models.template.yaml (read-only mount)",
+                value=export[3],
+                language="yaml",
+                lines=20,
+            )
+            effective_yaml_view = gr.Code(
+                label="Effective routing (template + runtime merge)",
+                value=export[4],
+                language="yaml",
+                lines=20,
+            )
 
         common_inputs = [
             vision_base_url,
@@ -214,6 +253,17 @@ def build_admin_blocks(app: Any) -> gr.Blocks:
             on_save,
             inputs=[test_ok_state, *common_inputs],
             outputs=[status_message, docling_preview, test_ok_state, runtime_state],
+        )
+
+        refresh_configs_btn.click(
+            handle_refresh_config_export,
+            outputs=[
+                config_paths_info,
+                runtime_yaml_view,
+                docling_yaml_view,
+                template_yaml_view,
+                effective_yaml_view,
+            ],
         )
 
     logger.info("[IMP:7][build_admin_blocks][READY] Gradio admin blocks constructed [OK]")

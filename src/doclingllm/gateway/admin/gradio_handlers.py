@@ -198,6 +198,22 @@ def handle_save_config(
     return SaveResult(ok=True, message=message, docling_preview=preview)
 
 
+def handle_refresh_config_export(
+    paths: Optional[ConfigPaths] = None,
+    settings: Optional[GatewaySettings] = None,
+) -> tuple[str, str, str, str, str]:
+    from doclingllm.gateway.admin.config_export import load_config_export_bundle
+
+    bundle = load_config_export_bundle(paths, settings)
+    return (
+        bundle.paths_summary,
+        bundle.runtime_yaml,
+        bundle.docling_serve_yaml,
+        bundle.models_template_yaml,
+        bundle.effective_routing_yaml,
+    )
+
+
 def load_admin_runtime(
     paths: Optional[ConfigPaths] = None,
     settings: Optional[GatewaySettings] = None,
