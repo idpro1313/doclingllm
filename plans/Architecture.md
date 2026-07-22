@@ -2,9 +2,9 @@
 
 $START_DOC_NAME
 
-**PURPOSE:** Детальная архитектура обёртки docling-serve с Model Gateway для маршрутизации всех ML-стадий во внешние API (Cloud.ru + LAN minimax) без изменения vendor-кода.
+**PURPOSE:** Детальная архитектура обёртки docling-serve с Model Gateway для маршрутизации всех ML-стадий во внешние API (vision Develonica + LAN minimax) без изменения vendor-кода.
 **SCOPE:** Компоненты, слои, интерфейсы, деплой, делегирование mode-code.
-**KEYWORDS:** docling-serve, Model Gateway, KServe v2, OpenAI-compatible, Docker, adapter, parser, Cloud.ru, DeepSeek-OCR-2, minimax
+**KEYWORDS:** docling-serve, Model Gateway, KServe v2, OpenAI-compatible, Docker, adapter, parser, Develonica, VISION_MODEL, minimax
 
 **Ссылки:** `plans/DevelopmentPlan.md` v0.1.1, `plans/business_requirements.md`, `plans/AppGraph.xml`
 
@@ -19,7 +19,7 @@ $START_DOCUMENT_PLAN
 
 **SECTION_USE_CASES:**
 - USE_CASE Operator → start.sh → healthy stack => UC_DEPLOY
-- USE_CASE Client → docling-serve → gateway → Cloud.ru/LAN => UC_CONVERT
+- USE_CASE Client → docling-serve → gateway → vision API / LAN => UC_CONVERT
 - USE_CASE pytest → gateway functions directly => UC_TEST
 
 $END_DOCUMENT_PLAN
@@ -50,13 +50,13 @@ flowchart TB
     Operator["Оператор Ubuntu"]
     DS["docling-serve\n(vendor, :5001)"]
     GW["Model Gateway\n(наш код, :8080 internal)"]
-    Cloud["Cloud.ru Foundation Models\nDeepSeek-OCR-2"]
+    Vision["Vision API\nDevelonica VISION_MODEL"]
     LAN["LAN minimax\n192.168.101.15:8111"]
 
     Operator -->|"scripts/start.sh"| DS
     Client -->|"POST /v1/convert/*"| DS
     DS -->|"KServe v2 HTTP\nOpenAI /v1/chat/completions"| GW
-    GW -->|"HTTPS Bearer"| Cloud
+    GW -->|"HTTPS Bearer"| Vision
     GW -->|"HTTP no auth"| LAN
 ```
 
@@ -66,7 +66,7 @@ flowchart TB
 | **Оператор** | Деплой, `.env`, мониторинг |
 | **docling-serve** | Оркестрация пайплайна Docling (read-only vendor) |
 | **Model Gateway** | Протокольный адаптер KServe ↔ OpenAI |
-| **Cloud.ru** | Vision/OCR/VLM (`deepseek-ai/DeepSeek-OCR-2`) |
+| **Vision API (Develonica)** | OCR/layout/VLM (`VISION_MODEL`, default `qwen3.6-35b-a3b`) |
 | **LAN minimax** | Текст (`minimax-m2.7`) |
 
 $END_BODY
@@ -104,7 +104,7 @@ $START_BODY
 │ L3 Adaptation   │ routing.py      │ stage → endpoint/mode     │
 │                 │ parsers/*.py    │ LLM text → tensor layout  │
 ├─────────────────┼─────────────────┼───────────────────────────┤
-│ L4 Integration  │ client.py       │ httpx → Cloud.ru / LAN  │
+│ L4 Integration  │ client.py       │ httpx → vision API / LAN  │
 │                 │ config.py       │ env + YAML load           │
 └─────────────────┴─────────────────┴───────────────────────────┘
          ▲                              ▲
@@ -149,11 +149,11 @@ $START_BODY
 | Method | Path | Потребитель docling | Backend |
 |--------|------|---------------------|---------|
 | GET | `/health` | start.sh, compose healthcheck | local |
-| POST | `/v2/models/ocr/infer` | OCR preset (kserve_v2_ocr) | Cloud.ru vision |
-| POST | `/v2/models/layout/infer` | Layout preset | Cloud.ru vision |
-| POST | `/v2/models/table/infer` | Table preset | Cloud.ru vision |
-| POST | `/v2/models/picture_classifier/infer` | Picture classification | Cloud.ru vision |
-| POST | `/v1/chat/completions` | VLM / picture_description presets | Cloud.ru proxy |
+| POST | `/v2/models/ocr/infer` | OCR preset (kserve_v2_ocr) | vision backend |
+| POST | `/v2/models/layout/infer` | Layout preset | vision backend |
+| POST | `/v2/models/table/infer` | Table preset | vision backend |
+| POST | `/v2/models/picture_classifier/infer` | Picture classification | vision backend |
+| POST | `/v1/chat/completions` | VLM / picture_description presets | vision proxy |
 
 **KServe request (упрощённо):** JSON с `inputs[]` — tensor `image` (bytes/base64), optional `lang`, `scale`.  
 **KServe response:** `outputs[]` — tensors в layout, ожидаемом docling для данной стадии (см. `docs/gateway_api_contract.md` — Phase P8).
@@ -222,12 +222,12 @@ $START_BODY
 
 | stage | endpoint | mode | model | parser |
 |-------|----------|------|-------|--------|
-| ocr | vision | openai_vision | DeepSeek-OCR-2 | `deepseek_ocr_json` |
-| layout | vision | openai_vision | DeepSeek-OCR-2 | `layout_boxes_json` |
-| table | vision | openai_vision | DeepSeek-OCR-2 | `table_structure_json` |
-| picture_classification | vision | openai_vision | DeepSeek-OCR-2 | `classification_json` |
-| picture_description | vision | openai_vision | DeepSeek-OCR-2 | `plain_text` |
-| vlm | vision | openai_proxy | DeepSeek-OCR-2 | pass-through |
+| ocr | vision | openai_vision | `${VISION_MODEL}` | `deepseek_ocr_json` |
+| layout | vision | openai_vision | `${VISION_MODEL}` | `layout_boxes_json` |
+| table | vision | openai_vision | `${VISION_MODEL}` | `table_structure_json` |
+| picture_classification | vision | openai_vision | `${VISION_MODEL}` | `classification_json` |
+| picture_description | vision | openai_vision | `${VISION_MODEL}` | `plain_text` |
+| vlm | vision | openai_proxy | `${VISION_MODEL}` | pass-through |
 | code_formula | text | openai_text | minimax-m2.7 | `plain_text` |
 
 **Parser registry (`parsers/__init__.py`):** dict `PARSER_REGISTRY[name] -> Callable[[str], dict]`.
@@ -247,7 +247,7 @@ $START_ARTIFACT_SEQ_OCR
 #### Sequence: OCR stage
 
 **TYPE:** USE_CASE
-**KEYWORDS:** OCR, KServe, DeepSeek
+**KEYWORDS:** OCR, KServe, vision API
 
 $START_BODY
 
@@ -256,7 +256,7 @@ sequenceDiagram
     participant C as Client
     participant DS as docling-serve
     participant GW as Model Gateway
-    participant CR as Cloud.ru API
+    participant CR as Vision API
 
     C->>DS: POST /v1/convert/file
     DS->>GW: POST /v2/models/ocr/infer (image tensor)
@@ -283,7 +283,7 @@ $START_BODY
 sequenceDiagram
     participant DS as docling-serve
     participant GW as Model Gateway
-    participant CR as Cloud.ru API
+    participant CR as Vision API
 
     DS->>GW: POST /v1/chat/completions
     GW->>CR: forward body + Authorization
@@ -348,7 +348,7 @@ flowchart LR
         ENV["deploy/.env"]
         CFG["deploy/config/"]
     end
-    Internet["Cloud.ru HTTPS"]
+    Internet["Vision API HTTPS"]
     LAN["192.168.101.15:8111"]
 
     DS --> GW
@@ -419,7 +419,7 @@ $START_BODY
 | `VISION_API_KEY` | Только `deploy/.env`, gitignore |
 | Логи gateway | Не логировать Bearer token; mask `Authorization` |
 | docling-serve | `DOCLING_SERVE_API_KEY` optional для клиентского API |
-| Cloud.ru | HTTPS verify default true |
+| Vision API | HTTPS verify default true |
 | LAN minimax | HTTP plain — acceptable в private LAN |
 
 **Observability:** JSON logs (`DOCLING_SERVE_LOG_FORMAT=json`); gateway structured logging `[IMP:*]`; correlation via docling `X-Docling-Log-*` headers pass-through.
@@ -459,7 +459,7 @@ $START_BODY
 ```text
 fastapi>=0.115.0      # ASGI routes KServe + OpenAI proxy
 uvicorn>=0.32.0       # Production server in gateway container
-httpx>=0.28.0         # Async outbound to Cloud.ru and LAN
+httpx>=0.28.0         # Async outbound to vision API and LAN
 pydantic-settings>=2  # Typed env/YAML config loading
 numpy>=2.0.0          # KServe tensor encode/decode
 pyyaml>=6.0           # gateway-models.yaml declarative routing
@@ -528,10 +528,10 @@ $START_BODY
 
 | ID | Риск | Архитектурный fallback |
 |----|------|------------------------|
-| R1 | DeepSeek-OCR-2 возвращает plain text, не JSON | Parser `plain_text_heuristic` + iterative prompt tuning; slice S3 isolated |
+| R1 | Vision model возвращает plain text, не JSON | Parser `plain_text_heuristic` + iterative prompt tuning; slice S3 isolated |
 | R2 | KServe tensor layout mismatch | Golden fixtures from docling tests in `tests/fixtures/kserve_*.json` |
 | R3 | Docker не видит LAN | Document `network_mode: host` toggle in compose override file |
-| R4 | Cloud.ru rate limit | httpx retry + exponential backoff in `client.py` |
+| R4 | Vision API rate limit | httpx retry + exponential backoff in `client.py` |
 | R5 | docling preset schema drift | Pin image tag; `test_compose_config.py` validates YAML keys |
 
 $END_BODY
@@ -545,7 +545,7 @@ $START_SECTION_OPEN
 
 | # | Вопрос | Рекомендация Architect | Решение |
 |---|--------|------------------------|---------|
-| O1 | Формат OCR-ответа DeepSeek | Начать с parser `plain_text` + JSON extract regex | TBD оператор |
+| O1 | Формат OCR-ответа vision model | Начать с parser `plain_text` + JSON extract regex | TBD оператор |
 | O2 | LAN из Docker | Default bridge; fallback `deploy/docker-compose.host-network.yml` | TBD на сервере |
 | O3 | Pin версии docling-serve image | Pin после первого успешного smoke | Code S6 |
 

@@ -1,15 +1,15 @@
 <KnowledgeGraph>
-  <doclingllm_0_2_0_Info TYPE="PROJECT_INFO">
-    <keywords>docling-serve, Model Gateway, KServe v2, Cloud.ru, DeepSeek-OCR-2, minimax, Docker, layered architecture</keywords>
-    <terms>L1 Transport, L2 Protocol, L3 Adaptation, L4 Integration, feature slice</terms>
-    <annotation>Обёртка docling-serve: Model Gateway (4 слоя) маршрутизирует vision→Cloud.ru и text→LAN minimax. Vendor read-only.</annotation>
+  <doclingllm_0_2_24_Info TYPE="PROJECT_INFO">
+    <keywords>docling-serve, Model Gateway, KServe v2, Develonica, VISION_MODEL, minimax, Docker, layered architecture, document-protocol</keywords>
+    <terms>L1 Transport, L2 Protocol, L3 Adaptation, L4 Integration, feature slice, overlay docling-serve</terms>
+    <annotation>Обёртка docling-serve: Model Gateway (4 слоя) маршрутизирует vision→Develonica и text→LAN minimax. Vendor read-only; overlay deploy/docling-serve.</annotation>
     <BusinessScenarios>
       <Scenario NAME="DeployOnUbuntu">Operator → scripts/start.sh → Docker stack healthy</Scenario>
       <Scenario NAME="ConvertDocument">Client → docling-serve:5001 → gateway:8080 → external APIs</Scenario>
-      <Scenario NAME="KServeOCR">docling OCR stage → gateway /v2/models/ocr/infer → DeepSeek-OCR-2</Scenario>
+      <Scenario NAME="KServeOCR">docling OCR stage → gateway /v2/models/ocr/infer → VISION_MODEL</Scenario>
       <Scenario NAME="TextEnrichment">docling code_formula → gateway → minimax-m2.7 LAN</Scenario>
     </BusinessScenarios>
-  </doclingllm_0_2_0_Info>
+  </doclingllm_0_2_24_Info>
 
   <plans_Architecture_md FILE="plans/Architecture.md" TYPE="ARCHITECTURE_DOCUMENT">
     <keywords>C4, layers, sequence, deployment, slices S1-S8</keywords>
@@ -69,12 +69,24 @@
   </src_doclingllm_gateway_parsers>
 
   <src_doclingllm_gateway_client_py FILE="src/doclingllm/gateway/client.py" TYPE="L4_INTEGRATION">
-    <annotation>httpx ExternalApiClient Cloud.ru Bearer and LAN minimax.</annotation>
+    <annotation>httpx ExternalApiClient vision Bearer and LAN minimax.</annotation>
   </src_doclingllm_gateway_client_py>
 
   <src_doclingllm_gateway_config_py FILE="src/doclingllm/gateway/config.py" TYPE="L4_INTEGRATION">
     <annotation>Pydantic settings VISION_API TEXT_API gateway bind.</annotation>
   </src_doclingllm_gateway_config_py>
+
+  <deploy_docling_serve_overlay FILE="deploy/docling-serve/Dockerfile" TYPE="VENDOR_OVERLAY">
+    <annotation>Quiet logs, Gradio VLM preset inject, API middleware vlm_pipeline_preset=default.</annotation>
+    <CrossLinks>
+      <Link TARGET="deploy_docker_compose_yml" TYPE="BUILT_BY" />
+    </CrossLinks>
+  </deploy_docling_serve_overlay>
+
+  <docs_README_md FILE="docs/README.md" TYPE="HUMAN_DOCUMENTATION">
+    <keywords>document-protocol, operator guide, documentation hub</keywords>
+    <annotation>Human-facing docs index; agent map in plans/.</annotation>
+  </docs_README_md>
 
   <scripts_start_sh FILE="scripts/start.sh" TYPE="DEPLOY_SCRIPT">
     <annotation>Ubuntu docker compose up healthcheck.</annotation>

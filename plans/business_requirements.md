@@ -44,9 +44,9 @@ $START_BODY
 | C1 | `docling-serve/**` не изменяется |
 | C2 | Целевая ОС — Ubuntu Server, запуск через bash-скрипт |
 | C3 | Сервер CPU-only (образ `docling-serve-cpu` или эквивалент) |
-| C4 | Два OpenAI-compatible backend'а: Cloud.ru (vision) + LAN minimax (text) |
+| C4 | Два OpenAI-compatible backend'а: vision Develonica (`VISION_*`) + LAN minimax (text) |
 | C5 | Все стадии пайплайна (OCR, layout, table, VLM, picture, code/formula) — через удалённый инференс |
-| C6 | Cloud.ru: `deepseek-ai/DeepSeek-OCR-2`, Bearer token в `deploy/.env` |
+| C6 | Vision: `VISION_MODEL` (default `qwen3.6-35b-a3b`), Bearer `VISION_API_KEY` в `deploy/.env` |
 | C7 | LAN text: `minimax-m2.7` @ `http://192.168.101.15:8111/v1`, без токена |
 $END_BODY
 

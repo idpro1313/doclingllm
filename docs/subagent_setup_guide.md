@@ -1,14 +1,52 @@
-# Настройка поисковых субагентов (OpenRouter & Kilo Gateway) в Kilo CLI
+# Настройка поисковых субагентов (OpenRouter & Kilo Gateway)
 
-В данном документе описан процесс настройки и использования "дешевых" поисковых субагентов для эффективного сбора контекста без расхода ресурсов основной модели.
+$START_DOC_NAME
 
+**PURPOSE:** Настроить «дешёвые» поисковые субагенты (grok_searcher) для сбора контекста без расхода основной модели.
+**SCOPE:** Kilo CLI, регистрация моделей, профили агентов, вызов через `task()`.
+**KEYWORDS:** grok_searcher, Kilo CLI, OpenRouter, subagent, task, semantic search
+
+$START_DOCUMENT_PLAN
+### Document Plan
+
+**SECTION_GOALS:**
+- GOAL Объяснить наследование моделей в task() => G_INHERITANCE
+- GOAL Описать регистрацию моделей и профилей => G_SETUP
+- GOAL Дать пример оркестрации => G_USAGE
+
+$END_DOCUMENT_PLAN
+
+---
+
+$START_SECTION_PROBLEM
 ## 1. Проблема наследования моделей
-По умолчанию инструмент `task` в Kilo CLI наследует модель родительского агента (например, Gemini 3 Flash). Использование UI-команд вроде `/ask` внутри параметров инструмента не переключает модель. Для маршрутизации на конкретную LLM требуется явное создание профиля агента и регистрация модели в реестре.
 
-## 2. Регистрация моделей в глобальном конфиге
-Для того чтобы Kilo CLI мог валидировать модель перед запуском субагента, её необходимо прописать в глобальном файле настроек `~/.config/kilo/kilo.jsonc`.
+$START_ARTIFACT_INHERITANCE
+#### Model inheritance
 
-**Пример регистрации для OpenRouter и Kilo Gateway:**
+**TYPE:** DECISION
+**KEYWORDS:** task tool, subagent
+
+$START_CONTRACT
+**PURPOSE:** Явно маршрутизировать субагента на дешёвую LLM.
+**DESCRIPTION:** По умолчанию `task` в Kilo CLI наследует модель родителя. UI-команды вроде `/ask` внутри параметров инструмента модель не переключают.
+**RATIONALE:** Нужен профиль агента + регистрация модели в реестре.
+**ACCEPTANCE_CRITERIA:** `subagent_type` указывает на файл в `agents/` с явным `model:` в frontmatter.
+$END_CONTRACT
+
+$END_ARTIFACT_INHERITANCE
+
+$END_SECTION_PROBLEM
+
+---
+
+$START_SECTION_REGISTRY
+## 2. Регистрация моделей
+
+$START_BODY
+
+Модель должна быть в глобальном `~/.config/kilo/kilo.jsonc`:
+
 ```jsonc
 "provider": {
   "kilo": {
@@ -30,10 +68,29 @@
 }
 ```
 
-## 3. Создание профиля субагента
-Создайте Markdown-файл для описания поведения и ограничений субагента по пути `.kilo/agents/<name>.md`.
+После изменения `kilo.jsonc` — полная перезагрузка CLI.
 
-**Пример для Grok (`grok-searcher.md`):**
+$END_BODY
+
+$END_SECTION_REGISTRY
+
+---
+
+$START_SECTION_PROFILE
+## 3. Профиль субагента
+
+$START_BODY
+
+Профили в репозитории:
+
+| Среда | Путь |
+|-------|------|
+| Cursor | [`.cursor/agents/grok_searcher.md`](../.cursor/agents/grok_searcher.md) |
+| Kilo Code | [`.kilocode/agents/grok_searcher.md`](../.kilocode/agents/grok_searcher.md) |
+| Kilo CLI | `.kilo/agents/` — создать при необходимости |
+
+Пример frontmatter:
+
 ```yaml
 ---
 description: Поисковый субагент на базе Grok
@@ -41,7 +98,6 @@ mode: subagent
 model: "kilo/x-ai/grok-code-fast-1:optimized:free"
 temperature: 0.1
 steps: 5
-hidden: false
 permission:
   edit: deny
   write: deny
@@ -52,27 +108,38 @@ permission:
   read: allow
   glob: allow
 ---
-Ты — специализированный поисковый субагент на базе Grok. Твоя задача: находить файлы, читать их структуру и извлекать семантическую разметку (MODULE_MAP, CONTRACT).
-Отвечай максимально кратко и по существу. Не пытайся изменять файлы.
+Ты — поисковый субагент. Находи файлы, читай GREP_SUMMARY/STRUCTURE и # region.
+Отвечай кратко. Не изменяй файлы.
 ```
 
-## 4. Использование в коде (Оркестрация)
-Основной агент (Plan/Code) вызывает субагента через инструмент `task`, указывая `subagent_type`, соответствующий имени файла в папке `agents/`.
+$END_BODY
 
-**Пример вызова:**
+$END_SECTION_PROFILE
+
+---
+
+$START_SECTION_USAGE
+## 4. Оркестрация
+
+$START_BODY
+
 ```python
 task(
-    subagent_type="grok-searcher", 
-    prompt="Найди все START_MODULE_MAP в папке lesson_25/", 
-    description="Архитектурный поиск через Grok"
+    subagent_type="grok-searcher",
+    prompt="Найди GREP_SUMMARY в src/doclingllm/gateway/",
+    description="Архитектурный поиск через Grok",
 )
 ```
 
-## 5. Важные нюансы
-- **Перезагрузка:** После изменения `kilo.jsonc` требуется полная перезагрузка среды CLI для обновления внутреннего реестра моделей.
-- **Префиксы:** Всегда используйте полный путь модели с префиксом провайдера:
-    - `kilo/` для моделей через Kilo Gateway.
-    - `openrouter/` для моделей через OpenRouter.
-- **Кавычки:** В YAML-фронтматтере ID модели (особенно с двоеточием) должен быть обернут в кавычки.
-- **Безопасность:** Режим `subagent` в сочетании с `permission: edit: deny` гарантирует, что поисковик не внесет случайных изменений в код.
-- **Общий контекст:** Субагенты автоматически наследуют общие инструкции проекта (например, `rules.md`), поэтому они понимают семантическую разметку и уровни логирования `IMP`.
+**Нюансы:**
+
+- Префиксы модели: `kilo/`, `openrouter/`
+- ID модели с `:` — в кавычках в YAML
+- `permission: edit: deny` — субагент не пишет в репозиторий
+- Субагент наследует project rules (Grace 2, `IMP` logging)
+
+$END_BODY
+
+$END_SECTION_USAGE
+
+$END_DOC_NAME

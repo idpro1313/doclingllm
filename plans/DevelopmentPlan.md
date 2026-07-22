@@ -353,9 +353,9 @@ pyyaml>=6.0           # gateway-models.yaml loading
 |------|-------------|-----------|
 | Custom API не совместим с KServe tensor format | Высокая | Gateway adapter + документированный contract; итерация mapping per stage |
 | Версия docling изменит имена `kind` для kserve | Средняя | Pin образ docling-serve; smoke-test при обновлении |
-| DeepSeek-OCR-2 не отдаёт структурированный JSON layout/table | Высокая | Prompt engineering + response parsers; итерация на реальных PDF |
+| Vision model не отдаёт структурированный JSON layout/table | Высокая | Prompt engineering + response parsers; итерация на реальных PDF |
 | Gateway в Docker не видит 192.168.101.15 | Средняя | `network_mode: host` или маршрутизация LAN; проверка в start.sh |
-| Latency Cloud.ru + LAN на больших PDF | Средняя | `GATEWAY_REQUEST_TIMEOUT`, async endpoints docling-serve |
+| Latency vision API + LAN на больших PDF | Средняя | `GATEWAY_REQUEST_TIMEOUT`, async endpoints docling-serve |
 | Утечка VISION_API_KEY | Средняя | только deploy/.env; ротация при попадании в чат/логи |
 
 ---
@@ -365,7 +365,7 @@ pyyaml>=6.0           # gateway-models.yaml loading
 - [ ] **AC1:** В репозитории нет изменений в `docling-serve/**` (git diff clean для vendor).
 - [ ] **AC2:** `scripts/start.sh` на Ubuntu с Docker поднимает stack; `scripts/healthcheck.sh` возвращает 0.
 - [ ] **AC3:** `DOCLING_SERVE_LOAD_MODELS_AT_BOOT=false` и presets указывают только на `model-gateway` (проверка в `tests/test_compose_config.py`).
-- [ ] **AC4:** Gateway маршрутизирует vision → Cloud.ru и text → minimax LAN (unit tests с mock httpx).
+- [ ] **AC4:** Gateway маршрутизирует vision → Develonica и text → minimax LAN (unit tests с mock httpx).
 - [ ] **AC5:** Model Gateway отвечает на KServe v2 infer для OCR и layout (unit tests с mock tensors).
 - [ ] **AC6:** E2E smoke (manual или pytest с mock external API): POST `/v1/convert/file` на docling-serve возвращает 200 и non-empty `md_content`.
 - [ ] **AC7:** Секреты только в `.env`; `.env` в `.gitignore`.
@@ -376,7 +376,7 @@ pyyaml>=6.0           # gateway-models.yaml loading
 ### 9. Статус перед mode-code
 
 1. **Architecture.md** — утверждён Architect (слои, API, deploy, slices S1–S8).
-2. **O1:** формат OCR-ответа DeepSeek — начать с heuristic parser (Architecture §10).
+2. **O1:** формат OCR-ответа vision model — начать с heuristic parser (Architecture §10).
 3. **O2:** LAN из Docker — default bridge, fallback host network (Architecture §5).
 4. **Действие:** делегировать **Slice S1** Code-агенту или последовательно S1→S8.
 
