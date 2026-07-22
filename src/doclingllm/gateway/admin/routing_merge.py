@@ -50,7 +50,9 @@ def apply_stage_overrides(
             continue
         stage_entry = dict(stages_raw[stage_name])
         stage_entry["endpoint"] = override.endpoint
-        stage_entry["model"] = override.model
+        # BUG_FIX_CONTEXT: kserve_relay stages keep template model/relay_model names for KServe URL, not admin VLM model.
+        if stage_entry.get("mode") != "kserve_relay":
+            stage_entry["model"] = override.model
         stages_raw[stage_name] = stage_entry
     substituted["stages"] = stages_raw
     return substituted

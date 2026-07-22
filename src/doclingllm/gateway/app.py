@@ -26,6 +26,7 @@ from doclingllm.gateway.kserve import (
     build_kserve_model_metadata,
     handle_kserve_infer,
 )
+from doclingllm.gateway.kserve_relay import handle_kserve_relay
 from doclingllm.gateway.kserve_binary import parse_kserve_infer_request
 from doclingllm.gateway.openai_proxy import handle_openai_proxy
 from doclingllm.gateway.request_logging import (
@@ -36,7 +37,7 @@ from doclingllm.gateway.request_logging import (
     log_gateway_kserve_response,
     log_gateway_openai_response,
 )
-from doclingllm.gateway.routing import RoutingTable
+from doclingllm.gateway.routing import RoutingTable, resolve_stage_route
 
 logger = logging.getLogger(__name__)
 
@@ -125,6 +126,27 @@ def create_app(
         try:
             request_id = begin_request_trace(prefix=f"kserve-{model_name}")
             raw_body = await request.body()
+            stage = KSERVE_MODEL_TO_STAGE[model_name]
+            route = resolve_stage_route(stage, state.routing_table, state.settings)
+            if route.mode == "kserve_relay":
+                logger.info(
+                    f"[IMP:7][kserve_infer][RELAY] model={model_name} stage={stage} "
+                    f"bytes={len(raw_body)} [FLOW]"
+                )
+                upstream = handle_kserve_relay(
+                    model_name,
+                    raw_body,
+                    dict(request.headers),
+                    state.client,
+                    state.routing_table,
+                    state.settings,
+                )
+                media_type = upstream.headers.get("content-type", "application/json")
+                return Response(
+                    content=upstream.content,
+                    status_code=upstream.status_code,
+                    media_type=media_type,
+                )
             content_type = request.headers.get("content-type", "")
             header_len = request.headers.get("Inference-Header-Content-Length")
             framing = {

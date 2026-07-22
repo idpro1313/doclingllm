@@ -15,7 +15,7 @@
 ## Q: Why separate routing from config.py?
 ## A: L3 Adaptation layer must not depend on pydantic-settings directly; tests inject YAML via tmp_path.
 ## @changes
-## LAST_CHANGE: [v0.3.7 – request_params per stage (max_tokens/temperature) for structured VLM calls.]
+## LAST_CHANGE: [v0.4.0 – kserve_relay mode and relay_model for native KServe passthrough.]
 ## @modulemap
 ## FUNC 10[Load YAML routing table] => load_routing_table
 ## FUNC 9[Resolve stage to outbound route] => resolve_stage_route
@@ -55,7 +55,7 @@ KNOWN_STAGE_NAMES = frozenset(
     }
 )
 
-KNOWN_MODES = frozenset({"openai_vision", "openai_proxy", "openai_text"})
+KNOWN_MODES = frozenset({"openai_vision", "openai_proxy", "openai_text", "kserve_relay"})
 
 
 # region CLASS_EndpointConfig [DOMAIN(8): Routing; CONCEPT(8): Endpoint; TECH(8): pydantic]
@@ -88,6 +88,7 @@ class StageConfig(BaseModel):
     response_parser: Optional[str] = None
     system_prompt: Optional[str] = None
     request_params: dict[str, Any] = Field(default_factory=dict)
+    relay_model: Optional[str] = None
 
     @field_validator("mode")
     @classmethod
@@ -114,6 +115,7 @@ class StageRoute(BaseModel):
     system_prompt: Optional[str] = None
     request_params: dict[str, Any] = Field(default_factory=dict)
     endpoint_name: str = ""
+    relay_model: Optional[str] = None
 
 
 # endregion CLASS_StageRoute
@@ -262,10 +264,17 @@ def resolve_stage_route(
         )
 
     endpoint_cfg = table.endpoints[stage_cfg.endpoint]
-    path = stage_cfg.path if stage_cfg.path.startswith("/") else f"/{stage_cfg.path}"
-    request_url = f"{endpoint_cfg.base_url}{path}"
     api_key = settings.resolve_api_key(endpoint_cfg.api_key_env)
     model = stage_cfg.model or endpoint_cfg.default_model
+
+    if stage_cfg.mode == "kserve_relay":
+        relay_target = stage_cfg.relay_model or model or stage
+        path = f"/v2/models/{relay_target}/infer"
+        request_url = f"{endpoint_cfg.base_url}{path}"
+        model = relay_target
+    else:
+        path = stage_cfg.path if stage_cfg.path.startswith("/") else f"/{stage_cfg.path}"
+        request_url = f"{endpoint_cfg.base_url}{path}"
 
     route = StageRoute(
         stage=stage,
@@ -279,6 +288,7 @@ def resolve_stage_route(
         system_prompt=stage_cfg.system_prompt,
         request_params=dict(stage_cfg.request_params),
         endpoint_name=stage_cfg.endpoint,
+        relay_model=stage_cfg.relay_model,
     )
     logger.info(
         f"[IMP:8][resolve_stage_route][RESOLVE] stage={stage} endpoint={endpoint_cfg.name} "

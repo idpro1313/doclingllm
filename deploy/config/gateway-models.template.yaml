@@ -80,3 +80,24 @@ stages:
     request_params:
       max_tokens: 512
       temperature: 0
+
+# --- Native KServe passthrough (optional) ---
+# Uncomment endpoint + switch stage mode to kserve_relay for byte-for-byte infer relay
+# (no VLM prompts, no response parsers). Admin UI vision model is NOT applied to relay_model.
+#
+# endpoints:
+#   kserve_native:
+#     base_url: "http://triton:8000"
+#     default_model: ""
+#
+# stages:
+#   ocr:
+#     endpoint: kserve_native
+#     mode: kserve_relay
+#     model: ocr
+#     relay_model: docling-ocr-v1
+#   layout:
+#     endpoint: kserve_native
+#     mode: kserve_relay
+#     model: layout
+#     relay_model: docling-layout-v1

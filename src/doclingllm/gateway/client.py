@@ -10,7 +10,7 @@
 ## - Authorization header is NEVER logged.
 ## - chat_completions raises httpx.HTTPStatusError on 4xx/5xx after logging IMP:10.
 ## @changes
-## LAST_CHANGE: [v0.3.7 – Stage request_params merge; IMP:8 usage/reasoning_tokens metrics log.]
+## LAST_CHANGE: [v0.4.0 – kserve_relay_infer raw-byte POST to native KServe backends.]
 ## @modulemap
 ## CLASS 10[Outbound HTTP client] => ExternalApiClient
 ## CLASS 8[Upstream transport/HTTP failure] => UpstreamApiError
@@ -236,6 +236,47 @@ class ExternalApiClient:
         )
         response_data = self.chat_completions(route, messages)
         return extract_assistant_content(response_data)
+
+    def kserve_relay_infer(
+        self,
+        route: StageRoute,
+        *,
+        upstream_url: str,
+        raw_body: bytes,
+        request_headers: dict[str, str],
+        relay_model: str,
+    ) -> httpx.Response:
+        """POST raw KServe infer body to upstream without JSON re-encoding."""
+        headers = dict(request_headers)
+        if route.api_key:
+            headers["Authorization"] = f"Bearer {route.api_key}"
+        if "content-type" not in headers:
+            headers["content-type"] = "application/json"
+
+        logger.info(
+            f"[IMP:7][ExternalApiClient.kserve_relay_infer][REQUEST] "
+            f"stage={route.stage} url={upstream_url} model={relay_model} "
+            f"bytes={len(raw_body)} [HTTP]"
+        )
+        try:
+            response = self._client.post(
+                upstream_url,
+                headers=headers,
+                content=raw_body,
+            )
+        except httpx.RequestError as exc:
+            logger.critical(
+                f"[IMP:10][ExternalApiClient.kserve_relay_infer][TRANSPORT] "
+                f"stage={route.stage} url={upstream_url} error={exc} [FATAL]"
+            )
+            raise UpstreamApiError(
+                f"Upstream transport failure for {upstream_url}: {exc}"
+            ) from exc
+        logger.info(
+            f"[IMP:9][ExternalApiClient.kserve_relay_infer][OK] "
+            f"stage={route.stage} status={response.status_code} [VALUE]"
+        )
+        return response
 
     def proxy_chat_completions(
         self,
