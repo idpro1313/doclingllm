@@ -8,7 +8,10 @@ import logging
 import httpx
 
 from doclingllm.gateway.admin.config_store import ensure_runtime_config_seeded
-from doclingllm.gateway.admin.connection_tester import run_all_connection_tests
+from doclingllm.gateway.admin.connection_tester import (
+    _format_chat_failure_detail,
+    run_all_connection_tests,
+)
 from doclingllm.gateway.admin.gradio_handlers import (
     handle_save_config,
     handle_test_connection,
@@ -81,3 +84,15 @@ def test_sync_stage_models_from_backends():
         },
     )
     assert synced == ["minimax-m2.7", "kimi-k2-6", "kimi-k2-6"]
+
+
+def test_chat_failure_detail_includes_available_models():
+    detail = _format_chat_failure_detail(
+        status_code=404,
+        model="minimax-m2.7",
+        response_text='{"error":"model not found"}',
+        available_models=["MiniMaxAI/MiniMax-M2", "other-model"],
+    )
+    assert "HTTP 404" in detail
+    assert "model='minimax-m2.7'" in detail
+    assert "MiniMaxAI/MiniMax-M2" in detail

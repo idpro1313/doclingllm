@@ -221,7 +221,21 @@ def build_admin_blocks(app: Any) -> gr.Blocks:
 
 
 def mount_admin_ui(app: Any) -> Any:
+    from fastapi.responses import RedirectResponse
+
+    # BUG_FIX_CONTEXT: Gradio index.html links /manifest.json at site root; when mounted at
+    # /admin the file lives at /admin/manifest.json — redirect removes browser 404 noise.
+    @app.get("/manifest.json", include_in_schema=False)
+    async def admin_manifest_redirect() -> RedirectResponse:
+        return RedirectResponse(url="/admin/manifest.json", status_code=307)
+
     blocks = build_admin_blocks(app)
-    mounted = gr.mount_gradio_app(app, blocks, path="/admin")
+    mounted = gr.mount_gradio_app(
+        app,
+        blocks,
+        path="/admin",
+        root_path="/admin",
+        pwa=False,
+    )
     logger.info("[IMP:9][mount_admin_ui][MOUNT] Gradio admin at /admin [OK]")
     return mounted

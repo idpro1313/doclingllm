@@ -60,37 +60,88 @@ def _auth_headers(api_key: str) -> dict[str, str]:
     return headers
 
 
+def _extract_model_ids(payload: Any) -> list[str]:
+    if not isinstance(payload, dict):
+        return []
+    data = payload.get("data")
+    if not isinstance(data, list):
+        return []
+    ids: list[str] = []
+    for item in data:
+        if isinstance(item, dict):
+            model_id = item.get("id")
+            if isinstance(model_id, str) and model_id:
+                ids.append(model_id)
+    return ids
+
+
+def _format_chat_failure_detail(
+    *,
+    status_code: int | None,
+    model: str,
+    response_text: str = "",
+    available_models: list[str] | None = None,
+    error: str = "",
+) -> str:
+    parts: list[str] = []
+    if status_code is not None:
+        parts.append(f"HTTP {status_code}")
+    if error:
+        parts.append(error)
+    parts.append(f"model={model!r}")
+    if response_text:
+        snippet = response_text.strip().replace("\n", " ")
+        if len(snippet) > 160:
+            snippet = snippet[:157] + "..."
+        parts.append(f"body={snippet}")
+    if available_models:
+        preview = ", ".join(available_models[:8])
+        suffix = "..." if len(available_models) > 8 else ""
+        parts.append(f"available_models=[{preview}{suffix}]")
+    return "; ".join(parts)
+
+
 def _probe_models_list(
     client: httpx.Client,
     backend_name: str,
     base_url: str,
     api_key: str,
-) -> ProbeResult:
+) -> tuple[ProbeResult, list[str]]:
     url = f"{base_url.rstrip('/')}/models"
     start = time.perf_counter()
     try:
         response = client.get(url, headers=_auth_headers(api_key), timeout=30.0)
         latency = (time.perf_counter() - start) * 1000
+        model_ids = _extract_model_ids(response.json()) if response.status_code < 400 else []
         if response.status_code >= 400:
-            return ProbeResult(
+            return (
+                ProbeResult(
+                    name=f"{backend_name}:models",
+                    ok=False,
+                    latency_ms=latency,
+                    detail=f"HTTP {response.status_code}",
+                ),
+                model_ids,
+            )
+        return (
+            ProbeResult(
                 name=f"{backend_name}:models",
-                ok=False,
+                ok=True,
                 latency_ms=latency,
                 detail=f"HTTP {response.status_code}",
-            )
-        return ProbeResult(
-            name=f"{backend_name}:models",
-            ok=True,
-            latency_ms=latency,
-            detail=f"HTTP {response.status_code}",
+            ),
+            model_ids,
         )
     except httpx.RequestError as exc:
         latency = (time.perf_counter() - start) * 1000
-        return ProbeResult(
-            name=f"{backend_name}:models",
-            ok=False,
-            latency_ms=latency,
-            detail=str(exc),
+        return (
+            ProbeResult(
+                name=f"{backend_name}:models",
+                ok=False,
+                latency_ms=latency,
+                detail=str(exc),
+            ),
+            [],
         )
 
 
@@ -101,6 +152,8 @@ def _probe_chat_ping(
     api_key: str,
     model: str,
     messages: list[dict[str, Any]],
+    *,
+    available_models: list[str] | None = None,
 ) -> ProbeResult:
     url = f"{base_url.rstrip('/')}/chat/completions"
     payload = {"model": model, "messages": messages, "max_tokens": 8}
@@ -118,7 +171,12 @@ def _probe_chat_ping(
                 name=f"{backend_name}:chat",
                 ok=False,
                 latency_ms=latency,
-                detail=f"HTTP {response.status_code}",
+                detail=_format_chat_failure_detail(
+                    status_code=response.status_code,
+                    model=model,
+                    response_text=response.text,
+                    available_models=available_models,
+                ),
             )
         return ProbeResult(
             name=f"{backend_name}:chat",
@@ -132,7 +190,11 @@ def _probe_chat_ping(
             name=f"{backend_name}:chat",
             ok=False,
             latency_ms=latency,
-            detail=str(exc),
+            detail=_format_chat_failure_detail(
+                model=model,
+                error=str(exc),
+                available_models=available_models,
+            ),
         )
 
 
@@ -168,9 +230,10 @@ def run_all_connection_tests(
                 f"[IMP:7][test_all_connections][BACKEND] {backend_name} "
                 f"url={backend.base_url} key={mask_api_key(backend.api_key)} [PROBE]"
             )
-            report.probes.append(
-                _probe_models_list(client, backend_name, backend.base_url, backend.api_key)
+            models_probe, available_models = _probe_models_list(
+                client, backend_name, backend.base_url, backend.api_key
             )
+            report.probes.append(models_probe)
             report.probes.append(
                 _probe_chat_ping(
                     client,
@@ -179,6 +242,7 @@ def run_all_connection_tests(
                     backend.api_key,
                     backend.model,
                     [{"role": "user", "content": "ping"}],
+                    available_models=available_models,
                 )
             )
             if backend_name == "vision":
@@ -190,6 +254,7 @@ def run_all_connection_tests(
                         backend.api_key,
                         backend.model,
                         _vision_ping_messages(),
+                        available_models=available_models,
                     )
                 )
         api_client = ExternalApiClient(settings, client=client)

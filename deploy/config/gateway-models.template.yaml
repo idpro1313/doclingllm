@@ -59,6 +59,6 @@ stages:
   code_formula:
     endpoint: text
     mode: openai_text
-    model: minimax-m2.7
+    model: "${TEXT_MODEL}"
     path: /chat/completions
     system_prompt: "Transcribe code or formula from the provided context."
