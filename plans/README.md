@@ -29,6 +29,7 @@ $START_BODY
 | [`Architecture.md`](Architecture.md) | document-protocol | **обязателен** | C4, слои L1–L4, sequence, deploy, S1–S8 |
 | [`AppGraph.xml`](AppGraph.xml) | graph-protocol | **обязателен** | XML knowledge graph кодовой базы |
 | [`business_requirements.md`](business_requirements.md) | document-protocol | по необходимости | Ограничения C1–C7, NFR |
+| [`GatewayAdminUI.md`](GatewayAdminUI.md) | devplan-protocol | feature plan | Gradio admin, volume, slices G1–G7 (v0.3.0) |
 
 $END_BODY
 

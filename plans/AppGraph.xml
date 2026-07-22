@@ -88,6 +88,26 @@
     <annotation>Human-facing docs index; agent map in plans/.</annotation>
   </docs_README_md>
 
+  <plans_GatewayAdminUI_md FILE="plans/GatewayAdminUI.md" TYPE="DEVELOPMENT_PLAN">
+    <keywords>Gradio admin, named volume, gateway-runtime, connection test</keywords>
+    <annotation>v0.3.0 Gateway Admin UI; slices G1-G7; collapse hypothesis A.</annotation>
+  </plans_GatewayAdminUI_md>
+
+  <volume_doclingllm_config TYPE="DOCKER_NAMED_VOLUME">
+    <annotation>gateway-runtime.yaml and generated docling-serve.yaml; not in project folder.</annotation>
+    <CrossLinks>
+      <Link TARGET="deploy_docker_compose_yml" TYPE="MOUNTED_BY" />
+    </CrossLinks>
+  </volume_doclingllm_config>
+
+  <src_doclingllm_gateway_admin TYPE="L1_UI_PACKAGE">
+    <annotation>ConfigStore, ConnectionTester, docling_generator, gradio_ui.</annotation>
+    <CrossLinks>
+      <Link TARGET="src_doclingllm_gateway_app_py" TYPE="MOUNTED_BY" />
+      <Link TARGET="volume_doclingllm_config" TYPE="READS_DATA_FROM" />
+    </CrossLinks>
+  </src_doclingllm_gateway_admin>
+
   <scripts_start_sh FILE="scripts/start.sh" TYPE="DEPLOY_SCRIPT">
     <annotation>Ubuntu docker compose up healthcheck.</annotation>
   </scripts_start_sh>

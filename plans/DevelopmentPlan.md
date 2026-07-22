@@ -400,4 +400,26 @@ pyyaml>=6.0           # gateway-models.yaml loading
 
 **Реализовано в 0.2.12:** YAML `engine_options.url`; OCR `(N,4,2)`; layout per-batch OD; `DocumentFigureClassifier-v2.5`; `UpstreamApiError`→502; proxy env; docs sync.
 
+---
+
+### 11. Gateway Admin UI (Gradio) — v0.3.0
+
+**Collapse (оператор 2026-07-22):**
+
+| Решение | Выбор |
+|---------|--------|
+| Архитектура | **Гипотеза A** — Gradio `/admin` в `model-gateway`, модуль `gateway/admin/` |
+| Persistence | **Named Docker volume** `doclingllm-config` → `/data/doclingllm/config` (не папка проекта) |
+| Runtime file | `gateway-runtime.yaml` на volume (ключи внутри) |
+| Templates в git | `gateway-models.template.yaml`, `docling-serve.template.yaml`, `gateway-runtime.defaults.yaml` |
+| docling apply | **Вариант 2** — preview + warning; **ручной** `docker compose restart docling-serve` |
+| Gateway apply | `POST /admin/reload` hot-reload |
+| Test gate | Save только после успешного test (models, chat, vision, per-stage) |
+| Auth v1 | Нет; `:8080` publish для local dev |
+| Stage UI v1 | endpoint + model; prompts в template |
+
+**Полный план:** [`plans/GatewayAdminUI.md`](GatewayAdminUI.md) — Draft Code Graph, data flow, slices **G1–G7**, acceptance AC-G1…G9.
+
+**Статус:** ожидает утверждения оператора → mode-code G1.
+
 $END_DEV_PLAN
