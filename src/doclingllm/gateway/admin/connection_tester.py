@@ -198,6 +198,75 @@ def _probe_chat_ping(
         )
 
 
+def _probe_kserve_server_ready(
+    client: httpx.Client,
+    backend_name: str,
+    base_url: str,
+    api_key: str,
+) -> ProbeResult:
+    url = f"{base_url.rstrip('/')}/v2/health/ready"
+    start = time.perf_counter()
+    try:
+        response = client.get(url, headers=_auth_headers(api_key), timeout=30.0)
+        latency = (time.perf_counter() - start) * 1000
+        if response.status_code >= 400:
+            return ProbeResult(
+                name=f"{backend_name}:health",
+                ok=False,
+                latency_ms=latency,
+                detail=f"HTTP {response.status_code}",
+            )
+        return ProbeResult(
+            name=f"{backend_name}:health",
+            ok=True,
+            latency_ms=latency,
+            detail=f"HTTP {response.status_code}",
+        )
+    except httpx.RequestError as exc:
+        latency = (time.perf_counter() - start) * 1000
+        return ProbeResult(
+            name=f"{backend_name}:health",
+            ok=False,
+            latency_ms=latency,
+            detail=str(exc),
+        )
+
+
+def _probe_kserve_model_ready(
+    client: httpx.Client,
+    backend_name: str,
+    base_url: str,
+    api_key: str,
+    model_name: str,
+) -> ProbeResult:
+    url = f"{base_url.rstrip('/')}/v2/models/{model_name}/ready"
+    start = time.perf_counter()
+    try:
+        response = client.get(url, headers=_auth_headers(api_key), timeout=30.0)
+        latency = (time.perf_counter() - start) * 1000
+        if response.status_code >= 400:
+            return ProbeResult(
+                name=f"{backend_name}:ready:{model_name}",
+                ok=False,
+                latency_ms=latency,
+                detail=f"HTTP {response.status_code}",
+            )
+        return ProbeResult(
+            name=f"{backend_name}:ready:{model_name}",
+            ok=True,
+            latency_ms=latency,
+            detail=f"HTTP {response.status_code}",
+        )
+    except httpx.RequestError as exc:
+        latency = (time.perf_counter() - start) * 1000
+        return ProbeResult(
+            name=f"{backend_name}:ready:{model_name}",
+            ok=False,
+            latency_ms=latency,
+            detail=str(exc),
+        )
+
+
 def _vision_ping_messages() -> list[dict[str, Any]]:
     encoded = base64.b64encode(_ONE_BY_ONE_PNG).decode("ascii")
     return [
@@ -257,11 +326,36 @@ def run_all_connection_tests(
                         available_models=available_models,
                     )
                 )
+        kserve_native = runtime.backends.get("kserve_native")
+        if kserve_native is not None and kserve_native.base_url.strip():
+            logger.info(
+                f"[IMP:7][test_all_connections][BACKEND] kserve_native "
+                f"url={kserve_native.base_url} key={mask_api_key(kserve_native.api_key)} [PROBE]"
+            )
+            report.probes.append(
+                _probe_kserve_server_ready(
+                    client,
+                    "kserve_native",
+                    kserve_native.base_url,
+                    kserve_native.api_key,
+                )
+            )
         api_client = ExternalApiClient(settings, client=client)
         for stage_name in sorted(KNOWN_STAGE_NAMES):
             if stage_name not in runtime.stages:
                 continue
             route = resolve_stage_route(stage_name, table, settings)
+            if route.mode == "kserve_relay":
+                report.probes.append(
+                    _probe_kserve_model_ready(
+                        client,
+                        f"stage:{stage_name}",
+                        route.base_url,
+                        route.api_key,
+                        route.model,
+                    )
+                )
+                continue
             messages = [{"role": "user", "content": f"ping stage {stage_name}"}]
             if route.mode == "openai_vision":
                 messages = _vision_ping_messages()

@@ -13,11 +13,14 @@ from doclingllm.gateway.admin.connection_tester import (
     run_all_connection_tests,
 )
 from doclingllm.gateway.admin.gradio_handlers import (
+    form_to_runtime,
     handle_save_config,
     handle_test_connection,
     parse_stage_inputs_from_form_tail,
     sync_stage_models_from_backends,
+    validate_stage_routing,
 )
+from doclingllm.gateway.admin.runtime_models import GatewayRuntimeConfig, StageOverride
 
 pytest_plugins = ["tests.conftest_admin"]
 
@@ -57,17 +60,42 @@ def test_save_after_successful_test(admin_config_paths, admin_settings):
 
 def test_gradio_stage_form_tail_order_matches_common_inputs():
     stage_names = ["ocr", "layout", "code_formula"]
-    tail = ["vision", "vision", "text", "kimi-k2-6", "kimi-k2-6", "minimax-m2.7"]
-    stage_models, stage_endpoints = parse_stage_inputs_from_form_tail(stage_names, tail)
+    tail = [
+        "openai_vision",
+        "kserve_relay",
+        "openai_text",
+        "vision",
+        "kserve_native",
+        "text",
+        "kimi-k2-6",
+        "ocr",
+        "minimax-m2.7",
+        "",
+        "docling-ocr-v1",
+        "",
+    ]
+    stage_modes, stage_endpoints, stage_models, stage_relay_models = (
+        parse_stage_inputs_from_form_tail(stage_names, tail)
+    )
+    assert stage_modes == {
+        "ocr": "openai_vision",
+        "layout": "kserve_relay",
+        "code_formula": "openai_text",
+    }
     assert stage_endpoints == {
         "ocr": "vision",
-        "layout": "vision",
+        "layout": "kserve_native",
         "code_formula": "text",
     }
     assert stage_models == {
         "ocr": "kimi-k2-6",
-        "layout": "kimi-k2-6",
+        "layout": "ocr",
         "code_formula": "minimax-m2.7",
+    }
+    assert stage_relay_models == {
+        "ocr": "",
+        "layout": "docling-ocr-v1",
+        "code_formula": "",
     }
 
 
@@ -79,11 +107,70 @@ def test_sync_stage_models_from_backends():
         text_model="minimax-m2.7",
         stage_endpoints={
             "code_formula": "text",
-            "layout": "vision",
+            "layout": "kserve_native",
             "ocr": "vision",
         },
+        stage_modes={
+            "code_formula": "openai_text",
+            "layout": "kserve_relay",
+            "ocr": "openai_vision",
+        },
+        current_models={
+            "code_formula": "minimax-m2.7",
+            "layout": "layout",
+            "ocr": "kimi-k2-6",
+        },
     )
-    assert synced == ["minimax-m2.7", "kimi-k2-6", "kimi-k2-6"]
+    assert synced == ["minimax-m2.7", "layout", "kimi-k2-6"]
+
+
+def test_form_to_runtime_kserve_relay(admin_settings):
+    runtime = form_to_runtime(
+        "https://vision/v1",
+        "v-key",
+        "vision-model",
+        "http://text/v1",
+        "",
+        "text-model",
+        "http://triton:8000",
+        "native-key",
+        300,
+        "",
+        "",
+        "localhost",
+        {"ocr": "kserve_relay"},
+        {"ocr": "kserve_native"},
+        {"ocr": "ocr"},
+        {"ocr": "docling-ocr-v1"},
+    )
+    assert runtime.backends["kserve_native"].base_url == "http://triton:8000"
+    assert runtime.stages["ocr"].mode == "kserve_relay"
+    assert runtime.stages["ocr"].relay_model == "docling-ocr-v1"
+
+
+def test_validate_stage_routing_requires_native_url():
+    from doclingllm.gateway.admin.runtime_models import BackendConfig
+
+    runtime = GatewayRuntimeConfig(
+        backends={
+            "vision": BackendConfig(base_url="https://v/v1", model="v"),
+            "text": BackendConfig(base_url="http://t/v1", model="t"),
+            "kserve_native": BackendConfig(base_url="", api_key=""),
+        }
+    )
+    stages = {
+        "ocr": StageOverride(
+            endpoint="kserve_native",
+            model="ocr",
+            mode="kserve_relay",
+            relay_model="docling-ocr-v1",
+        )
+    }
+    try:
+        validate_stage_routing(runtime, stages)
+        assert False, "expected ValueError"
+    except ValueError as exc:
+        assert "KServe Native base URL" in str(exc)
 
 
 def test_chat_failure_detail_includes_available_models():

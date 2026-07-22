@@ -159,8 +159,15 @@ stages:
         encoding="utf-8",
     )
     paths = replace(admin_config_paths, models_template=relay_template)
+    from doclingllm.gateway.admin.runtime_models import StageOverride
+
     runtime = ensure_runtime_config_seeded(paths, admin_settings)
-    runtime.stages["ocr"].model = "admin-vision-model"
+    runtime.stages["ocr"] = StageOverride(
+        endpoint="kserve_native",
+        model="ocr",
+        mode="kserve_relay",
+        relay_model="native-ocr",
+    )
     merged = build_merged_routing_dict(runtime, paths)
     assert merged["stages"]["ocr"]["model"] == "ocr"
     assert merged["stages"]["ocr"]["relay_model"] == "native-ocr"

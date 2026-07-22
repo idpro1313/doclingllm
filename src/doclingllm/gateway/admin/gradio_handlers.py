@@ -3,7 +3,7 @@
 def _module_contract():
     pass
 # endregion MODULE_CONTRACT
-# GREP_SUMMARY: gradio handlers, test save, admin UI, runtime form
+# GREP_SUMMARY: gradio handlers, test save, admin UI, runtime form, kserve_relay, stage mode
 # STRUCTURE: ▶ form → GatewayRuntimeConfig → ◇ test → ⊕ save → ⎋ reload hint
 
 import logging
@@ -28,9 +28,12 @@ from doclingllm.gateway.admin.runtime_models import (
     mask_api_key,
 )
 from doclingllm.gateway.config import GatewaySettings, load_gateway_settings
-from doclingllm.gateway.routing import KNOWN_STAGE_NAMES
+from doclingllm.gateway.routing import KNOWN_MODES, KNOWN_STAGE_NAMES
 
 logger = logging.getLogger(__name__)
+
+STAGE_MODE_CHOICES = sorted(KNOWN_MODES)
+STAGE_ENDPOINT_CHOICES = ["vision", "text", "kserve_native"]
 
 
 @dataclass
@@ -43,16 +46,19 @@ class SaveResult:
 def runtime_to_form(runtime: GatewayRuntimeConfig) -> dict[str, Any]:
     vision = runtime.backends["vision"]
     text = runtime.backends["text"]
-    stage_models = {
-        stage: runtime.stages[stage].model
-        for stage in KNOWN_STAGE_NAMES
-        if stage in runtime.stages
-    }
-    stage_endpoints = {
-        stage: runtime.stages[stage].endpoint
-        for stage in KNOWN_STAGE_NAMES
-        if stage in runtime.stages
-    }
+    kserve_native = runtime.backends.get("kserve_native", BackendConfig())
+    stage_models: dict[str, str] = {}
+    stage_endpoints: dict[str, str] = {}
+    stage_modes: dict[str, str] = {}
+    stage_relay_models: dict[str, str] = {}
+    for stage in KNOWN_STAGE_NAMES:
+        if stage not in runtime.stages:
+            continue
+        entry = runtime.stages[stage]
+        stage_models[stage] = entry.model
+        stage_endpoints[stage] = entry.endpoint
+        stage_modes[stage] = entry.resolved_mode(stage)
+        stage_relay_models[stage] = entry.relay_model
     return {
         "vision_base_url": vision.base_url,
         "vision_api_key": vision.api_key,
@@ -60,36 +66,52 @@ def runtime_to_form(runtime: GatewayRuntimeConfig) -> dict[str, Any]:
         "text_base_url": text.base_url,
         "text_api_key": text.api_key,
         "text_model": text.model,
+        "kserve_native_base_url": kserve_native.base_url,
+        "kserve_native_api_key": kserve_native.api_key,
         "request_timeout": runtime.gateway.request_timeout,
         "http_proxy": runtime.proxy.http_proxy,
         "https_proxy": runtime.proxy.https_proxy,
         "no_proxy": runtime.proxy.no_proxy,
         "stage_models": stage_models,
         "stage_endpoints": stage_endpoints,
+        "stage_modes": stage_modes,
+        "stage_relay_models": stage_relay_models,
         "last_test_ok": runtime.meta.last_test_ok,
     }
 
 
 def split_stage_form_values(
     stage_names: list[str],
+    stage_mode_values: list[str],
     stage_endpoint_values: list[str],
     stage_model_values: list[str],
-) -> tuple[dict[str, str], dict[str, str]]:
-    """Map parallel Gradio stage inputs to dicts (endpoints before models in form)."""
-    stage_models = dict(zip(stage_names, stage_model_values, strict=True))
+    stage_relay_model_values: list[str],
+) -> tuple[dict[str, str], dict[str, str], dict[str, str], dict[str, str]]:
+    """Map parallel Gradio stage inputs to dicts (modes, endpoints, models, relay_models)."""
+    stage_modes = dict(zip(stage_names, stage_mode_values, strict=True))
     stage_endpoints = dict(zip(stage_names, stage_endpoint_values, strict=True))
-    return stage_models, stage_endpoints
+    stage_models = dict(zip(stage_names, stage_model_values, strict=True))
+    stage_relay_models = dict(zip(stage_names, stage_relay_model_values, strict=True))
+    return stage_modes, stage_endpoints, stage_models, stage_relay_models
 
 
 def parse_stage_inputs_from_form_tail(
     stage_names: list[str],
     tail: list[Any],
-) -> tuple[dict[str, str], dict[str, str]]:
-    """Parse flat form tail: [*endpoint_dropdowns, *model_textboxes]."""
+) -> tuple[dict[str, str], dict[str, str], dict[str, str], dict[str, str]]:
+    """Parse flat form tail: [*modes, *endpoints, *models, *relay_models]."""
     count = len(stage_names)
-    stage_endpoint_values = tail[:count]
-    stage_model_values = tail[count : 2 * count]
-    return split_stage_form_values(stage_names, stage_endpoint_values, stage_model_values)
+    stage_mode_values = tail[:count]
+    stage_endpoint_values = tail[count : 2 * count]
+    stage_model_values = tail[2 * count : 3 * count]
+    stage_relay_model_values = tail[3 * count : 4 * count]
+    return split_stage_form_values(
+        stage_names,
+        stage_mode_values,
+        stage_endpoint_values,
+        stage_model_values,
+        stage_relay_model_values,
+    )
 
 
 def sync_stage_models_from_backends(
@@ -97,16 +119,45 @@ def sync_stage_models_from_backends(
     vision_model: str,
     text_model: str,
     stage_endpoints: dict[str, str],
+    stage_modes: dict[str, str],
+    current_models: dict[str, str],
 ) -> list[str]:
-    """Return model names per stage row (same order as stage_names)."""
+    """Return model names per stage row; preserve relay gateway aliases."""
     models: list[str] = []
     for stage in stage_names:
+        mode = stage_modes.get(stage, "openai_vision")
+        if mode == "kserve_relay":
+            models.append(current_models.get(stage, stage))
+            continue
         endpoint = stage_endpoints.get(
             stage,
             "text" if stage == "code_formula" else "vision",
         )
         models.append(text_model if endpoint == "text" else vision_model)
     return models
+
+
+def validate_stage_routing(
+    runtime: GatewayRuntimeConfig,
+    stages: dict[str, StageOverride],
+) -> None:
+    kserve_backend = runtime.backends.get("kserve_native", BackendConfig())
+    for stage_name, override in stages.items():
+        mode = override.resolved_mode(stage_name)
+        if mode != "kserve_relay":
+            continue
+        if override.endpoint != "kserve_native":
+            raise ValueError(
+                f"Stage {stage_name}: kserve_relay requires endpoint kserve_native"
+            )
+        if not override.relay_model.strip():
+            raise ValueError(
+                f"Stage {stage_name}: kserve_relay requires relay_model (upstream KServe name)"
+            )
+        if not kserve_backend.base_url.strip():
+            raise ValueError(
+                f"Stage {stage_name}: kserve_relay requires KServe Native base URL"
+            )
 
 
 def form_to_runtime(
@@ -116,24 +167,35 @@ def form_to_runtime(
     text_base_url: str,
     text_api_key: str,
     text_model: str,
+    kserve_native_base_url: str,
+    kserve_native_api_key: str,
     request_timeout: float,
     http_proxy: str,
     https_proxy: str,
     no_proxy: str,
-    stage_models: dict[str, str],
+    stage_modes: dict[str, str],
     stage_endpoints: dict[str, str],
+    stage_models: dict[str, str],
+    stage_relay_models: dict[str, str],
     previous: Optional[GatewayRuntimeConfig] = None,
 ) -> GatewayRuntimeConfig:
     base = previous or GatewayRuntimeConfig()
-    stages = {}
+    stages: dict[str, StageOverride] = {}
     for stage in KNOWN_STAGE_NAMES:
         endpoint = stage_endpoints.get(stage, "vision" if stage != "code_formula" else "text")
+        mode = stage_modes.get(stage, "openai_vision")
         model = stage_models.get(
             stage,
-            text_model if endpoint == "text" else vision_model,
+            stage if mode == "kserve_relay" else (text_model if endpoint == "text" else vision_model),
         )
-        stages[stage] = StageOverride(endpoint=endpoint, model=model)
-    return GatewayRuntimeConfig(
+        relay_model = stage_relay_models.get(stage, "")
+        stages[stage] = StageOverride(
+            endpoint=endpoint,
+            model=model.strip(),
+            mode=mode,
+            relay_model=relay_model.strip(),
+        )
+    runtime = GatewayRuntimeConfig(
         version=base.version,
         backends={
             "vision": BackendConfig(
@@ -145,6 +207,11 @@ def form_to_runtime(
                 base_url=text_base_url.strip(),
                 api_key=text_api_key,
                 model=text_model.strip(),
+            ),
+            "kserve_native": BackendConfig(
+                base_url=kserve_native_base_url.strip(),
+                api_key=kserve_native_api_key,
+                model="",
             ),
         },
         gateway=GatewaySection(
@@ -159,6 +226,8 @@ def form_to_runtime(
         stages=stages,
         meta=base.meta,
     )
+    validate_stage_routing(runtime, stages)
+    return runtime
 
 
 def handle_test_connection(

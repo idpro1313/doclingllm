@@ -3,7 +3,7 @@
 def _module_contract():
     pass
 # endregion MODULE_CONTRACT
-# GREP_SUMMARY: gradio admin UI, /admin, gateway settings form
+# GREP_SUMMARY: gradio admin UI, /admin, gateway settings form, kserve_relay, stage mode
 # STRUCTURE: ▶ Blocks tabs → ◇ handlers → ⊕ test state → Save gated
 
 import logging
@@ -13,6 +13,8 @@ import gradio as gr
 from pydantic import ValidationError
 
 from doclingllm.gateway.admin.gradio_handlers import (
+    STAGE_ENDPOINT_CHOICES,
+    STAGE_MODE_CHOICES,
     form_to_runtime,
     handle_refresh_config_export,
     handle_save_config,
@@ -60,14 +62,39 @@ def build_admin_blocks(app: Any) -> gr.Blocks:
             )
             text_model = gr.Textbox(label="Model", value=form["text_model"])
 
+        with gr.Tab("KServe Native"):
+            kserve_native_base_url = gr.Textbox(
+                label="Base URL",
+                value=form["kserve_native_base_url"],
+                placeholder="http://triton:8000",
+            )
+            kserve_native_api_key = gr.Textbox(
+                label="API Key (optional)",
+                value=form["kserve_native_api_key"],
+                type="password",
+            )
+            gr.Markdown(
+                "Backend для **kserve_relay**: byte-for-byte passthrough "
+                "`/v2/models/{relay_model}/infer`. Заполните URL перед включением relay на стадиях."
+            )
+
         with gr.Tab("Stages"):
+            stage_mode_inputs = []
             stage_endpoint_inputs = []
             stage_model_inputs = []
+            stage_relay_model_inputs = []
             for stage in stage_names:
                 with gr.Row():
+                    stage_mode_inputs.append(
+                        gr.Dropdown(
+                            choices=STAGE_MODE_CHOICES,
+                            value=form["stage_modes"].get(stage, "openai_vision"),
+                            label=f"{stage} mode",
+                        )
+                    )
                     stage_endpoint_inputs.append(
                         gr.Dropdown(
-                            choices=["vision", "text"],
+                            choices=STAGE_ENDPOINT_CHOICES,
                             value=form["stage_endpoints"].get(stage, "vision"),
                             label=f"{stage} endpoint",
                         )
@@ -78,13 +105,22 @@ def build_admin_blocks(app: Any) -> gr.Blocks:
                             value=form["stage_models"].get(stage, form["vision_model"]),
                         )
                     )
+                    stage_relay_model_inputs.append(
+                        gr.Textbox(
+                            label=f"{stage} relay_model",
+                            value=form["stage_relay_models"].get(stage, ""),
+                            placeholder="upstream KServe name",
+                        )
+                    )
             sync_models_btn = gr.Button(
                 "Применить модели из вкладок Vision / Text",
                 variant="secondary",
             )
             gr.Markdown(
-                "После смены модели на вкладке **Vision** нажмите кнопку выше, "
-                "чтобы обновить все vision-stages."
+                "**mode** — как gateway обрабатывает стадию. "
+                "**kserve_relay** — passthrough на KServe Native (нужны endpoint=kserve_native, "
+                "relay_model и base URL на вкладке KServe Native). "
+                "**model** для relay — gateway alias (ocr/layout/…); **relay_model** — имя модели на Triton."
             )
 
         with gr.Tab("Proxy / Timeout"):
@@ -148,12 +184,16 @@ def build_admin_blocks(app: Any) -> gr.Blocks:
             text_base_url,
             text_api_key,
             text_model,
+            kserve_native_base_url,
+            kserve_native_api_key,
             request_timeout,
             http_proxy,
             https_proxy,
             no_proxy,
+            *stage_mode_inputs,
             *stage_endpoint_inputs,
             *stage_model_inputs,
+            *stage_relay_model_inputs,
             runtime_state,
         ]
 
@@ -166,14 +206,16 @@ def build_admin_blocks(app: Any) -> gr.Blocks:
                 t_url,
                 t_key,
                 t_model,
+                kn_url,
+                kn_key,
                 timeout,
                 h_proxy,
                 hs_proxy,
                 n_proxy,
-            ) = rest[:10]
-            stage_models, stage_endpoints = parse_stage_inputs_from_form_tail(
-                stage_names,
-                rest[10 : 10 + 2 * len(stage_names)],
+            ) = rest[:12]
+            stage_tail = rest[12 : 12 + 4 * len(stage_names)]
+            stage_modes, stage_endpoints, stage_models, stage_relay_models = (
+                parse_stage_inputs_from_form_tail(stage_names, stage_tail)
             )
             return form_to_runtime(
                 v_url,
@@ -182,25 +224,38 @@ def build_admin_blocks(app: Any) -> gr.Blocks:
                 t_url,
                 t_key,
                 t_model,
+                kn_url,
+                kn_key,
                 timeout,
                 h_proxy,
                 hs_proxy,
                 n_proxy,
-                stage_models,
+                stage_modes,
                 stage_endpoints,
+                stage_models,
+                stage_relay_models,
                 previous=previous,
             )
 
         def _format_config_error(exc: Exception) -> str:
             return f"**Ошибка конфигурации:**\n\n```\n{exc}\n```"
 
-        def on_sync_models(v_model: str, t_model: str, *endpoint_values: str):
-            stage_endpoints = dict(zip(stage_names, endpoint_values, strict=True))
+        def on_sync_models(v_model: str, t_model: str, *stage_values: str):
+            count = len(stage_names)
+            stage_modes = dict(zip(stage_names, stage_values[:count], strict=True))
+            stage_endpoints = dict(
+                zip(stage_names, stage_values[count : 2 * count], strict=True)
+            )
+            current_models = dict(
+                zip(stage_names, stage_values[2 * count : 3 * count], strict=True)
+            )
             return sync_stage_models_from_backends(
                 stage_names,
                 v_model.strip(),
                 t_model.strip(),
                 stage_endpoints,
+                stage_modes,
+                current_models,
             )
 
         def on_test(*values: Any):
@@ -240,7 +295,13 @@ def build_admin_blocks(app: Any) -> gr.Blocks:
 
         sync_models_btn.click(
             on_sync_models,
-            inputs=[vision_model, text_model, *stage_endpoint_inputs],
+            inputs=[
+                vision_model,
+                text_model,
+                *stage_mode_inputs,
+                *stage_endpoint_inputs,
+                *stage_model_inputs,
+            ],
             outputs=stage_model_inputs,
         )
 

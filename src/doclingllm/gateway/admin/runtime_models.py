@@ -11,7 +11,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
 
-from doclingllm.gateway.routing import KNOWN_STAGE_NAMES
+from doclingllm.gateway.routing import KNOWN_MODES, KNOWN_STAGE_NAMES
 
 DEFAULT_STAGE_ENDPOINTS: dict[str, str] = {
     "ocr": "vision",
@@ -22,6 +22,18 @@ DEFAULT_STAGE_ENDPOINTS: dict[str, str] = {
     "vlm": "vision",
     "code_formula": "text",
 }
+
+DEFAULT_STAGE_MODES: dict[str, str] = {
+    "ocr": "openai_vision",
+    "layout": "openai_vision",
+    "table": "openai_vision",
+    "picture_classification": "openai_vision",
+    "picture_description": "openai_vision",
+    "vlm": "openai_proxy",
+    "code_formula": "openai_text",
+}
+
+KNOWN_RUNTIME_ENDPOINTS = frozenset({"vision", "text", "kserve_native"})
 
 
 class BackendConfig(BaseModel):
@@ -38,13 +50,29 @@ class BackendConfig(BaseModel):
 class StageOverride(BaseModel):
     endpoint: str
     model: str
+    mode: str = ""
+    relay_model: str = ""
 
     @field_validator("endpoint")
     @classmethod
     def validate_endpoint(cls, value: str) -> str:
-        if value not in {"vision", "text"}:
-            raise ValueError(f"Stage endpoint must be vision or text, got {value!r}")
+        if value not in KNOWN_RUNTIME_ENDPOINTS:
+            raise ValueError(
+                f"Stage endpoint must be one of {sorted(KNOWN_RUNTIME_ENDPOINTS)}, got {value!r}"
+            )
         return value
+
+    @field_validator("mode")
+    @classmethod
+    def validate_mode(cls, value: str) -> str:
+        if value and value not in KNOWN_MODES:
+            raise ValueError(f"Unknown routing mode: {value}. Expected one of {sorted(KNOWN_MODES)}")
+        return value
+
+    def resolved_mode(self, stage_name: str) -> str:
+        if self.mode:
+            return self.mode
+        return DEFAULT_STAGE_MODES.get(stage_name, "openai_vision")
 
 
 class GatewaySection(BaseModel):
@@ -69,6 +97,7 @@ class GatewayRuntimeConfig(BaseModel):
         default_factory=lambda: {
             "vision": BackendConfig(),
             "text": BackendConfig(),
+            "kserve_native": BackendConfig(),
         }
     )
     gateway: GatewaySection = Field(default_factory=GatewaySection)
@@ -81,8 +110,24 @@ class GatewayRuntimeConfig(BaseModel):
         for stage_name in KNOWN_STAGE_NAMES:
             if stage_name not in stages:
                 endpoint = DEFAULT_STAGE_ENDPOINTS[stage_name]
-                model = text_model if endpoint == "text" else vision_model
-                stages[stage_name] = StageOverride(endpoint=endpoint, model=model)
+                mode = DEFAULT_STAGE_MODES.get(stage_name, "openai_vision")
+                if mode == "kserve_relay":
+                    model = stage_name
+                    endpoint = "kserve_native"
+                else:
+                    model = text_model if endpoint == "text" else vision_model
+                stages[stage_name] = StageOverride(
+                    endpoint=endpoint,
+                    model=model,
+                    mode=mode,
+                    relay_model="",
+                )
+            else:
+                existing = stages[stage_name]
+                mode = existing.resolved_mode(stage_name)
+                stages[stage_name] = existing.model_copy(
+                    update={"mode": mode},
+                )
         return self.model_copy(update={"stages": stages})
 
     def mark_test_result(self, ok: bool) -> "GatewayRuntimeConfig":

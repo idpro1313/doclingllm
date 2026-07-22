@@ -66,6 +66,9 @@ class GatewaySettings(BaseSettings):
     text_api_key: str = Field(default="", alias="TEXT_API_KEY")
     text_model: str = Field(default="minimax-m2.7", alias="TEXT_MODEL")
 
+    kserve_native_api_base_url: str = Field(default="", alias="KSERVE_NATIVE_API_BASE_URL")
+    kserve_native_api_key: str = Field(default="", alias="KSERVE_NATIVE_API_KEY")
+
     gateway_host: str = Field(default="0.0.0.0", alias="GATEWAY_HOST")
     gateway_port: int = Field(default=8080, alias="GATEWAY_PORT")
     gateway_request_timeout: float = Field(default=300.0, alias="GATEWAY_REQUEST_TIMEOUT")
@@ -77,7 +80,7 @@ class GatewaySettings(BaseSettings):
         alias="GATEWAY_MODELS_CONFIG_PATH",
     )
 
-    @field_validator("vision_api_base_url", "text_api_base_url")
+    @field_validator("vision_api_base_url", "text_api_base_url", "kserve_native_api_base_url")
     @classmethod
     def strip_trailing_slash_from_base_url(cls, value: str) -> str:
         return value.rstrip("/")
@@ -98,6 +101,8 @@ class GatewaySettings(BaseSettings):
             "TEXT_API_BASE_URL": self.text_api_base_url,
             "TEXT_API_KEY": self.text_api_key,
             "TEXT_MODEL": self.text_model,
+            "KSERVE_NATIVE_API_BASE_URL": self.kserve_native_api_base_url,
+            "KSERVE_NATIVE_API_KEY": self.kserve_native_api_key,
         }
 
     def resolve_api_key(self, api_key_env_name: Optional[str]) -> str:
@@ -110,6 +115,7 @@ class GatewaySettings(BaseSettings):
         field_map = {
             "VISION_API_KEY": self.vision_api_key,
             "TEXT_API_KEY": self.text_api_key,
+            "KSERVE_NATIVE_API_KEY": self.kserve_native_api_key,
         }
         return field_map.get(api_key_env_name, "")
 

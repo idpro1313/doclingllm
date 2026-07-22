@@ -3,8 +3,8 @@
 def _module_contract():
     pass
 # endregion MODULE_CONTRACT
-# GREP_SUMMARY: routing merge, runtime, template, load_merged_routing_table
-# STRUCTURE: ▶ runtime+template → ⊕ env_map → ◇ stage overrides → ⎋ RoutingTable
+# GREP_SUMMARY: routing merge, runtime, template, load_merged_routing_table, kserve_native, kserve_relay
+# STRUCTURE: ▶ runtime+template → ⊕ env_map → ◇ endpoints → ◇ stage overrides → ⎋ RoutingTable
 
 import logging
 from pathlib import Path
@@ -28,7 +28,8 @@ logger = logging.getLogger(__name__)
 def build_env_map_from_runtime(runtime: GatewayRuntimeConfig) -> dict[str, str]:
     vision = runtime.backends["vision"]
     text = runtime.backends["text"]
-    return {
+    kserve_native = runtime.backends.get("kserve_native")
+    env_map = {
         "VISION_API_BASE_URL": vision.base_url,
         "VISION_API_KEY": vision.api_key,
         "VISION_MODEL": vision.model,
@@ -36,6 +37,27 @@ def build_env_map_from_runtime(runtime: GatewayRuntimeConfig) -> dict[str, str]:
         "TEXT_API_KEY": text.api_key,
         "TEXT_MODEL": text.model,
     }
+    if kserve_native is not None:
+        env_map["KSERVE_NATIVE_API_BASE_URL"] = kserve_native.base_url
+        env_map["KSERVE_NATIVE_API_KEY"] = kserve_native.api_key
+    return env_map
+
+
+def apply_runtime_endpoints(
+    substituted: dict[str, Any],
+    runtime: GatewayRuntimeConfig,
+) -> dict[str, Any]:
+    endpoints_raw = substituted.get("endpoints", {})
+    endpoints = dict(endpoints_raw) if isinstance(endpoints_raw, dict) else {}
+    kserve_native = runtime.backends.get("kserve_native")
+    if kserve_native is not None and kserve_native.base_url.strip():
+        endpoints["kserve_native"] = {
+            "base_url": kserve_native.base_url.rstrip("/"),
+            "api_key_env": "KSERVE_NATIVE_API_KEY",
+            "default_model": kserve_native.model or "",
+        }
+    substituted["endpoints"] = endpoints
+    return substituted
 
 
 def apply_stage_overrides(
@@ -49,10 +71,16 @@ def apply_stage_overrides(
         if stage_name not in stages_raw or not isinstance(stages_raw[stage_name], dict):
             continue
         stage_entry = dict(stages_raw[stage_name])
+        resolved_mode = override.resolved_mode(stage_name)
         stage_entry["endpoint"] = override.endpoint
-        # BUG_FIX_CONTEXT: kserve_relay stages keep template model/relay_model names for KServe URL, not admin VLM model.
-        if stage_entry.get("mode") != "kserve_relay":
+        stage_entry["mode"] = resolved_mode
+        if resolved_mode == "kserve_relay":
+            stage_entry["model"] = override.model or stage_name
+            if override.relay_model.strip():
+                stage_entry["relay_model"] = override.relay_model.strip()
+        else:
             stage_entry["model"] = override.model
+            stage_entry.pop("relay_model", None)
         stages_raw[stage_name] = stage_entry
     substituted["stages"] = stages_raw
     return substituted
@@ -74,6 +102,7 @@ def build_merged_routing_dict(
         raise ValueError("gateway-models.template.yaml must be a mapping")
     env_map = build_env_map_from_runtime(runtime)
     substituted = substitute_in_object(template, env_map)
+    substituted = apply_runtime_endpoints(substituted, runtime)
     return apply_stage_overrides(substituted, runtime)
 
 

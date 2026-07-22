@@ -33,8 +33,10 @@ def apply_env_fallback(
 ) -> GatewayRuntimeConfig:
     vision = config.backends.get("vision")
     text = config.backends.get("text")
+    kserve_native = config.backends.get("kserve_native")
     vision_data = (vision.model_dump() if vision else {}).copy()
     text_data = (text.model_dump() if text else {}).copy()
+    kserve_data = (kserve_native.model_dump() if kserve_native else {}).copy()
     if not vision_data.get("base_url"):
         vision_data["base_url"] = settings.vision_api_base_url
     if not vision_data.get("api_key"):
@@ -47,6 +49,8 @@ def apply_env_fallback(
         text_data["api_key"] = settings.text_api_key
     if not text_data.get("model"):
         text_data["model"] = settings.text_model
+    if kserve_native is None:
+        kserve_data = {"base_url": "", "api_key": "", "model": ""}
     gateway = config.gateway.model_dump()
     if not config.gateway.request_timeout:
         gateway["request_timeout"] = settings.gateway_request_timeout
@@ -67,6 +71,7 @@ def apply_env_fallback(
             "backends": {
                 "vision": BackendConfig(**vision_data),
                 "text": BackendConfig(**text_data),
+                "kserve_native": BackendConfig(**kserve_data),
             },
             "gateway": gateway_section,
             "proxy": proxy_section,
@@ -178,6 +183,12 @@ def runtime_to_settings(
             "text_api_base_url": runtime.backends["text"].base_url,
             "text_api_key": runtime.backends["text"].api_key,
             "text_model": runtime.backends["text"].model,
+            "kserve_native_api_base_url": runtime.backends.get(
+                "kserve_native", BackendConfig()
+            ).base_url,
+            "kserve_native_api_key": runtime.backends.get(
+                "kserve_native", BackendConfig()
+            ).api_key,
             "gateway_request_timeout": runtime.gateway.request_timeout,
             "gateway_log_level": runtime.gateway.log_level,
         }
