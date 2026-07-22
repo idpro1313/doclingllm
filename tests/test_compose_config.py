@@ -102,6 +102,17 @@ def test_redeploy_sh_pull_stop_start():
     assert "start.sh" in text
 
 
+def test_redeploy_fast_sh_defaults_to_gateway_with_cache():
+    repo_root = Path(__file__).resolve().parents[1]
+    fast_sh = repo_root / "scripts" / "redeploy-fast.sh"
+    text = fast_sh.read_text(encoding="utf-8")
+    assert "model-gateway" in text
+    assert "docker compose build" in text
+    assert "--no-cache" not in text
+    assert "--no-build" in text
+    assert "healthcheck.sh" in text
+
+
 def test_gateway_models_template_has_all_stages():
     repo_root = Path(__file__).resolve().parents[1]
     config_path = repo_root / "deploy" / "config" / "gateway-models.template.yaml"

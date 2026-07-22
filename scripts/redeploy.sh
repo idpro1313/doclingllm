@@ -5,6 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 echo "[doclingllm] Redeploy from ${PROJECT_ROOT}"
+echo "[doclingllm] Tip: for cached partial rebuild use ./scripts/redeploy-fast.sh"
 
 if ! command -v git >/dev/null 2>&1; then
   echo "ERROR: git not found." >&2

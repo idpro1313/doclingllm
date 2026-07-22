@@ -80,7 +80,23 @@ cd doclingllm
 Обновление на сервере:
 
 ```bash
-./scripts/redeploy.sh       # git pull → stop → start (rebuild образов)
+./scripts/redeploy-fast.sh    # быстро: pull + rebuild gateway (Docker cache)
+./scripts/redeploy.sh         # полный: pull → stop → rebuild всего стека
+```
+
+**`redeploy-fast.sh`** (по умолчанию только `model-gateway`, без `--no-cache`):
+
+| Опция | Действие |
+|-------|----------|
+| *(без флагов)* | `git pull` → build gateway → up |
+| `--all` | оба сервиса |
+| `--docling` | только docling-serve overlay |
+| `--no-build` | pull + restart без rebuild (config/.env) |
+| `--no-pull` | без git pull |
+
+```bash
+./scripts/redeploy-fast.sh --no-build   # после Save в Admin UI
+./scripts/redeploy-fast.sh --all        # после смены base image docling-serve
 ```
 
 После старта:
